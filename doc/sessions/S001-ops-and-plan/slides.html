@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S001 運用基盤と計画 — Fakers Notion</title>
+<link rel="stylesheet" href="../../assets/slides.css">
+</head>
+<body data-deck="Fakers Notion S001 運用基盤と計画">
+
+<section class="slide" id="S01">
+  <span class="tag">S001 · 2026-10-22 · P0</span>
+  <h1>運用基盤と計画</h1>
+  <p class="lead">GlobeMode の運用の型（worktree・記録・セッション文書）を移し、Rust / Elixir / Gleam の役割と P1 の縦スライスを決めた</p>
+  <div class="big">コードはまだ無い。<b>正典の文書 3 本・ADR 5 本・調査 1 本</b>と、S002 の手順 12 段を残した</div>
+</section>
+
+<section class="slide" id="S02">
+  <span class="tag">目的</span>
+  <h1>このセッションでやること</h1>
+  <ul>
+    <li>依頼 1: 「Notion を模倣する。メインは Rust, Gleam, Elixir。コアは Rust、分散処理やホットスワップは Elixir や Gleam がよいか」→ 役割分担の評価</li>
+    <li>依頼 2: 「プランを作成し進めて」→ 骨組み + 最初の縦スライス（ユーザーが範囲・UI・DB を選んだ）</li>
+    <li>依頼 3: 「GlobeMode のセッションを参考にして記録やワークツリーを管理して」→ P0 運用基盤をこのセッションにした</li>
+    <li>方針: Python は uv、Rust は Cargo、それ以外は mise。サブエージェントは Opus / effort medium</li>
+  </ul>
+</section>
+
+<section class="slide" id="S03">
+  <span class="tag">決定と理由</span>
+  <h1>決めたこと</h1>
+  <table class="compact">
+    <tr><th>項目</th><th>決定</th><th>理由</th></tr>
+    <tr><td>作業ツリー</td><td>main 直下の <code>.git-worktree/sNNN-&lt;topic&gt;</code>。orca の worktree は起動場所だけ</td><td>GlobeMode の finish-session がそのまま使える</td></tr>
+    <tr><td>セッションの分割</td><td>S001 = 運用基盤、S002 = 縦スライス</td><td>規約を先に main に置き、実装の差分を小さく保つ</td></tr>
+    <tr><td>言語の役割（ADR-0002）</td><td>Rust コア、Elixir リアルタイムと分散、Gleam 共有する型と Lustre、Python ツール</td><td>三言語税を境界で防ぐ。Gleam の固有の価値は両ターゲット</td></tr>
+    <tr><td>CRDT（ADR-0003、Proposed）</td><td>yjs / yrs。状態は BEAM 側のバイナリ、NIF は純関数</td><td>Rustler は NIF をホットスワップできない。<code>small-client</code> と UTF-16 が要る</td></tr>
+    <tr><td>Gleam の組み込み（ADR-0004、Proposed）</td><td>mix.exs のカスタムコンパイラ、Lustre + esbuild</td><td>mix_gleam は停滞。lustre_dev_tools の Bun は 16K ページで不安</td></tr>
+    <tr><td>DB（ADR-0005、ユーザー）</td><td>SQLite（ecto_sqlite3）</td><td>Postgres が無く、常駐を増やさない。P5 で移行</td></tr>
+    <tr><td>Python パッケージ</td><td><code>src/Python/mod/fakers_notion</code> に改名</td><td>数字で始まるモジュール名は import できない</td></tr>
+  </table>
+</section>
+
+<section class="slide" id="S04">
+  <span class="tag">図</span>
+  <h1>層の構成（P1 の縦スライス）</h1>
+  <svg class="fig" viewBox="0 0 800 300" role="img" aria-label="層の構成">
+    <rect class="svg-box-accent" x="20" y="100" width="170" height="100" rx="10"/>
+    <text class="svg-text-b" x="105" y="135" text-anchor="middle">ブラウザ</text>
+    <text class="svg-text" x="105" y="160" text-anchor="middle">Lustre（Gleam → JS）</text>
+    <text class="svg-text" x="105" y="182" text-anchor="middle">yjs は FFI の中</text>
+    <line class="svg-line" x1="190" y1="150" x2="250" y2="150"/>
+    <text class="svg-text" x="220" y="135" text-anchor="middle">WS</text>
+    <rect class="svg-box" x="250" y="100" width="170" height="100" rx="10"/>
+    <text class="svg-text-b" x="335" y="135" text-anchor="middle">Phoenix</text>
+    <text class="svg-text" x="335" y="160" text-anchor="middle">DocumentChannel</text>
+    <text class="svg-text" x="335" y="182" text-anchor="middle">DocumentServer</text>
+    <line class="svg-line" x1="420" y1="150" x2="480" y2="150"/>
+    <text class="svg-text" x="450" y="135" text-anchor="middle">NIF</text>
+    <rect class="svg-box-accent" x="480" y="100" width="150" height="100" rx="10"/>
+    <text class="svg-text-b" x="555" y="135" text-anchor="middle">Rust</text>
+    <text class="svg-text" x="555" y="160" text-anchor="middle">fakers_core</text>
+    <text class="svg-text" x="555" y="182" text-anchor="middle">yrs（純関数）</text>
+    <line class="svg-line" x1="335" y1="200" x2="335" y2="250"/>
+    <rect class="svg-box" x="250" y="250" width="170" height="40" rx="10"/>
+    <text class="svg-text-b" x="335" y="276" text-anchor="middle">SQLite（state）</text>
+    <rect class="svg-box" x="660" y="100" width="120" height="100" rx="10"/>
+    <text class="svg-text-b" x="720" y="135" text-anchor="middle">Gleam</text>
+    <text class="svg-text" x="720" y="160" text-anchor="middle">fakers_shared</text>
+    <text class="svg-text" x="720" y="182" text-anchor="middle">Erlang + JS</text>
+    <line class="svg-line" x1="660" y1="120" x2="420" y2="120"/>
+    <line class="svg-line" x1="720" y1="100" x2="720" y2="60"/>
+    <line class="svg-line" x1="720" y1="60" x2="105" y2="60"/>
+    <line class="svg-line" x1="105" y1="60" x2="105" y2="100"/>
+    <text class="svg-text" x="410" y="50" text-anchor="middle">同じ型を両ターゲットで共有</text>
+  </svg>
+</section>
+
+<section class="slide" id="S05">
+  <span class="tag">図</span>
+  <h1>運用の流れ（GlobeMode と同じ）</h1>
+  <svg class="fig" viewBox="0 0 800 220" role="img" aria-label="運用の流れ">
+    <rect class="svg-box" x="10" y="60" width="140" height="70" rx="10"/>
+    <text class="svg-text-b" x="80" y="90" text-anchor="middle">start-session</text>
+    <text class="svg-text" x="80" y="112" text-anchor="middle">.git-worktree/sNNN</text>
+    <line class="svg-line" x1="150" y1="95" x2="200" y2="95"/>
+    <rect class="svg-box-accent" x="200" y="60" width="140" height="70" rx="10"/>
+    <text class="svg-text-b" x="270" y="90" text-anchor="middle">作業</text>
+    <text class="svg-text" x="270" y="112" text-anchor="middle">作業記録を書き足す</text>
+    <line class="svg-line" x1="340" y1="95" x2="390" y2="95"/>
+    <rect class="svg-box" x="390" y="60" width="140" height="70" rx="10"/>
+    <text class="svg-text-b" x="460" y="90" text-anchor="middle">finish-session</text>
+    <text class="svg-text" x="460" y="112" text-anchor="middle">検査・文書・記録</text>
+    <line class="svg-line" x1="530" y1="95" x2="580" y2="95"/>
+    <rect class="svg-box" x="580" y="60" width="210" height="70" rx="10"/>
+    <text class="svg-text-b" x="685" y="90" text-anchor="middle">merge --no-ff → push main</text>
+    <text class="svg-text" x="685" y="112" text-anchor="middle">2 つ以上前の worktree を片付け</text>
+    <text class="svg-text" x="400" y="180" text-anchor="middle">記録: log/work（決めたこと）・log/sessions（伏せ字済みの全量）・doc/sessions（スライドと解説書）</text>
+  </svg>
+</section>
+
+<section class="slide" id="S06">
+  <span class="tag">再現手順</span>
+  <h1>再現と検証</h1>
+  <pre><code>MAIN=~/monorepo/Chaos/20261022_Fakers_Notion
+git -C "$MAIN" worktree add -b feature/s001-ops-and-plan .git-worktree/s001-ops-and-plan main
+cd "$MAIN/.git-worktree/s001-ops-and-plan"
+mise trust &amp;&amp; mise install &amp;&amp; uv sync     # erlang / elixir / gleam / node / uv、Playwright
+mise run doctor
+mise run docs:check                        # check_docs.py と render_slides.py</code></pre>
+  <div class="kpis">
+    <div class="kpi"><span class="n">5</span><span class="l">ADR</span></div>
+    <div class="kpi"><span class="n">2 / 2</span><span class="l">デッキ OK（リンク 90 件）</span></div>
+    <div class="kpi"><span class="n">0</span><span class="l">リンク切れ</span></div>
+    <div class="kpi"><span class="n">0</span><span class="l">伏せ字の取りこぼし</span></div>
+    <div class="kpi"><span class="n">0</span><span class="l">漏洩の疑い</span></div>
+  </div>
+</section>
+
+<section class="slide" id="S07">
+  <span class="tag">次回</span>
+  <h1>S002: 骨組みと縦スライス（P1）</h1>
+  <ul>
+    <li>mise のタスク → Rust workspace と <code>fakers_core</code>（yrs、<code>small-client</code>、UTF-16）→ <b>相互運用ゲート</b>（yrs → yjs）</li>
+    <li><code>fakers_shared</code>（両ターゲット）→ <code>phx.new</code>（sqlite3、HTML 無し）→ <code>fakers_nif</code> と <code>Fakers.Native</code> → GleamShared コンパイラ</li>
+    <li><code>DocumentServer</code> と <code>DocumentChannel</code>（バイナリの sync / update）→ JSON API → Lustre SPA → <code>mise run dev</code> で 2 タブの確認</li>
+    <li>通ったら ADR-0003 と ADR-0004 を Accepted にする。S003 で CI とライセンス</li>
+  </ul>
+</section>
+
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

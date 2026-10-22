@@ -1,0 +1,36 @@
+[settings]
+lockfile = true                    # 解決した正確なバージョンを mise.lock に記録する
+jobs = 1                           # Raspberry Pi: 並列インストールでメモリを使わない
+activate_aggressive = true         # mise のツールを PATH の先頭に置く（nvm の node が mise の node より先に出たため。S001）
+
+# 言語の管理は uv（Python 本体と依存）・cargo / rustup（Rust）・mise（それ以外）で分担する（ADR-0001）。
+# python と rust は書かない。Python 本体は uv が .python-version（3.12）から取得し、Rust は rustup の stable を使う。
+[tools]
+uv     = "0.13.4"                  # pyproject.toml の uv_build に合わせる
+erlang = "27.3.4.19"               # この RPi に入っている版（GLIBC_2.34 まで。glibc 2.36 で動く）
+elixir = "1.18.3-otp-27"           # erlang のメジャー番号と -otp-NN を必ず揃える
+gleam  = "1.19.2"
+node   = "24.22.0"                 # esbuild と yjs（src/Gleam/fakers_web）のため
+
+[env]
+CARGO_BUILD_JOBS = "2"             # RPi の RAM を使い切らないように、cargo の並列を 2 に絞る
+
+[tasks.doctor]
+description = "ツールの版を表示する（mise / rustup / uv の全部）"
+run = """
+set -eu
+erl -noshell -eval 'io:format("erlang ~s (~s)~n",[erlang:system_info(otp_release), erlang:system_info(version)]), halt().'
+elixir --version | tail -1
+gleam --version
+node --version
+rustc --version
+cargo --version
+uv --version
+"""
+
+[tasks."docs:check"]
+description = "スライド・リンクの検査と、Playwright でのブラウザ表示の検査"
+run = [
+  "python3 -I .claude/skills/session-docs/check_docs.py",
+  "uv run python .claude/skills/session-docs/render_slides.py",
+]
