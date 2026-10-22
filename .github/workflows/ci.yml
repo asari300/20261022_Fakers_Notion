@@ -24,7 +24,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      # shortcut: --locked を付けない。mise.lock は aarch64 で作ったので erlang の x86_64 の記録が無い。遅い・版が動くようなら lock を x86_64 でも作り直す
       - uses: jdx/mise-action@v5
+        with:
+          install: false
+      - run: mise install
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src/Rust
