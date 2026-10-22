@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S005 キャレットと再接続 — Fakers Notion</title>
+<link rel="stylesheet" href="../../assets/slides.css">
+</head>
+<body data-deck="Fakers Notion S005 キャレットと再接続">
+
+<section class="slide" id="S01">
+  <span class="tag">S005 · 2026-10-23 · P2</span>
+  <h1>キャレットと再接続</h1>
+  <p class="lead">P2 の 1 回目。リモート編集でキャレットが飛ぶ問題を直した</p>
+  <div class="big">リモート更新を当てても<b>キャレットは動かない</b>。title も<b>見出しに追従</b>し、再接続も E2E で確かめた</div>
+</section>
+
+<section class="slide" id="S02">
+  <span class="tag">目的</span>
+  <h1>このセッションでやること</h1>
+  <ul>
+    <li>ブロックは制御された <code>&lt;input&gt;</code>。リモート編集のたびに Lustre が <code>value</code> を書き、手元のキャレットが末尾へ飛んでいた</li>
+    <li>最初の見出しを <code>title</code> 列へ写す</li>
+    <li>サーバー停止中の編集が、再起動後に相手のタブへ届くことを E2E で確かめる</li>
+    <li>文脈: S004 で worktree の実体を USB へ移した（<code>/mnt/usb_sd64c/Fakers_Notion/worktrees/</code>、<code>.git-worktree/</code> にシンボリックリンク）。コールドビルドは SD で 52 分、USB で 24 分</li>
+  </ul>
+</section>
+
+<section class="slide" id="S03">
+  <span class="tag">決定と理由</span>
+  <h1>決めたこと</h1>
+  <table class="compact">
+    <tr><th>項目</th><th>決定</th><th>理由</th></tr>
+    <tr><td>キャレット</td><td><code>applyRemote</code> で Y.RelativePosition に変換し、更新後に <code>setSelectionRange</code></td><td>相対位置なら、手前への挿入でもキャレットが同じ文字に付いてくる</td></tr>
+    <tr><td>Lustre との折り合い</td><td>先に <code>el.value</code> を書いておく</td><td>同じ値の再設定は、HTML 仕様でキャレットを動かさない</td></tr>
+    <tr><td>title</td><td><code>do_flush</code> で最初の見出しの文字列を書く。見出しが無ければ変えない</td><td>保存の経路に乗せれば、クライアントに title の送信が要らない</td></tr>
+    <tr><td>入力要素</td><td><code>&lt;input&gt;</code> のまま</td><td>キャレットの目的には足りた。contenteditable は後回し</td></tr>
+  </table>
+</section>
+
+<section class="slide" id="S04">
+  <span class="tag">図</span>
+  <h1>applyRemote の流れ</h1>
+  <svg class="fig" viewBox="0 0 800 200" role="img" aria-label="applyRemote の流れ">
+    <rect class="svg-box" x="10" y="60" width="180" height="80" rx="10"/>
+    <text class="svg-text-b" x="100" y="95" text-anchor="middle">選択を記録</text>
+    <text class="svg-text" x="100" y="120" text-anchor="middle">RelativePosition</text>
+    <line class="svg-line" x1="190" y1="100" x2="210" y2="100"/>
+    <rect class="svg-box-accent" x="210" y="60" width="180" height="80" rx="10"/>
+    <text class="svg-text-b" x="300" y="95" text-anchor="middle">更新を適用</text>
+    <text class="svg-text" x="300" y="120" text-anchor="middle">Y.applyUpdate</text>
+    <line class="svg-line" x1="390" y1="100" x2="410" y2="100"/>
+    <rect class="svg-box" x="410" y="60" width="180" height="80" rx="10"/>
+    <text class="svg-text-b" x="500" y="95" text-anchor="middle">位置を戻す</text>
+    <text class="svg-text" x="500" y="120" text-anchor="middle">value と範囲</text>
+    <line class="svg-line" x1="590" y1="100" x2="610" y2="100"/>
+    <rect class="svg-box" x="610" y="60" width="180" height="80" rx="10"/>
+    <text class="svg-text-b" x="700" y="95" text-anchor="middle">Lustre</text>
+    <text class="svg-text" x="700" y="120" text-anchor="middle">同じ値で動かない</text>
+  </svg>
+</section>
+
+<section class="slide" id="S05">
+  <span class="tag">再現手順</span>
+  <h1>検証の結果</h1>
+  <table class="compact">
+    <tr><th>E2E の手順</th><th>確かめたこと</th></tr>
+    <tr><td>5 キャレット</td><td>タブ 1 のキャレットが 5、タブ 2 が先頭に AB を挿入すると、タブ 1 は 7 のままフォーカスが残る</td></tr>
+    <tr><td>6 見出しの編集</td><td><code>/api/pages</code> の title が変わる</td></tr>
+    <tr><td>8 再接続</td><td>サーバー停止中にタブ 1 で入力し、再起動するとタブ 2 に届く</td></tr>
+  </table>
+  <div class="kpis">
+    <div class="kpi"><span class="n">20 / 0</span><span class="l">Elixir テスト / 失敗</span></div>
+    <div class="kpi"><span class="n">26 ms</span><span class="l">タブ 1 → タブ 2</span></div>
+    <div class="kpi"><span class="n">3896 ms</span><span class="l">再起動開始から配達まで</span></div>
+  </div>
+</section>
+
+<section class="slide" id="S06">
+  <span class="tag">再現手順</span>
+  <h1>修正を外すと落ちる</h1>
+  <pre><code>uv run python src/Python/e2e/two_tabs.py</code></pre>
+  <ul>
+    <li>修正を無効にするとキャレットの検査が落ちる: <code>[True, 18, 18]</code>（末尾へ飛ぶ）</li>
+    <li>修正を戻すと E2E が通る</li>
+  </ul>
+</section>
+
+<section class="slide" id="S07">
+  <span class="tag">次回</span>
+  <h1>積み残しと次</h1>
+  <ul>
+    <li class="warn">IME の変換中にリモート更新が入ると、フォーカス中の input の書き換えで変換が壊れうる（未対応）</li>
+    <li>ロードマップは contenteditable だが、まだ <code>&lt;input&gt;</code></li>
+    <li>S006: Presence とカーソルの表示</li>
+    <li>S007: ブロックの種類を増やす</li>
+  </ul>
+</section>
+
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

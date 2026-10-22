@@ -58,6 +58,14 @@ defmodule Fakers.DocumentsTest do
     stop_if_alive(doc.id)
   end
 
+  test "flush で最初の見出しの文字列が title に写る", %{doc: doc} do
+    {:ok, {_, update}} = Native.edit_text(doc.state, block_id(doc.state, 0), 3, "2")
+    :ok = Documents.apply_update(doc.id, update)
+    :ok = DocumentServer.flush(doc.id)
+    assert [%{title: "テスト2"}] = Documents.list_pages()
+    stop_if_alive(doc.id)
+  end
+
   test "debounce のタイマーでも DB に書かれる", %{doc: doc} do
     {:ok, {_, update}} = Native.edit_text(doc.state, block_id(doc.state, 1), 0, "later")
     :ok = Documents.apply_update(doc.id, update)

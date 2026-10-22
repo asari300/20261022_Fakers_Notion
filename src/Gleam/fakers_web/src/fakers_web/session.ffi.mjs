@@ -55,6 +55,36 @@ function findIndex(blocks, blockId) {
   return -1;
 }
 
+// フォーカス中のブロック入力欄の選択範囲を Y.Text 上の相対位置で覚え、
+// リモート更新を適用した後に入力欄へ書き戻す（値を先に揃えておくと、
+// Lustre が同じ値を設定してもキャレットは動かない）。
+function applyRemote(doc, update) {
+  const el = typeof document === "undefined" ? null : document.activeElement;
+  const blockId = el?.id?.startsWith("block-") ? el.id.slice(6) : null;
+  const block = blockId ? findBlockIn(doc, blockId) : null;
+  if (!block || el.selectionStart == null) {
+    Y.applyUpdate(doc, update, REMOTE);
+    return;
+  }
+  const text = block.get("text");
+  const dir = el.selectionDirection ?? "none";
+  const rel = [el.selectionStart, el.selectionEnd].map((i) =>
+    Y.createRelativePositionFromTypeIndex(text, i),
+  );
+  Y.applyUpdate(doc, update, REMOTE);
+  const next = text.toString();
+  if (next === el.value) return;
+  const [a, b] = rel.map((r) => Y.createAbsolutePositionFromRelativePosition(r, doc)?.index ?? next.length);
+  el.value = next;
+  el.setSelectionRange(a, b, dir);
+}
+
+function findBlockIn(doc, blockId) {
+  const blocks = doc.getArray("blocks");
+  const i = findIndex(blocks, blockId);
+  return i < 0 ? null : blocks.get(i);
+}
+
 function findBlock(session, blockId) {
   const blocks = session.doc.getArray("blocks");
   const i = findIndex(blocks, blockId);
@@ -95,7 +125,7 @@ export function open(docId, onBlocks, onStatus) {
 
   channel.on("sync", (buf) => {
     const state = new Uint8Array(buf);
-    Y.applyUpdate(doc, state, REMOTE);
+    applyRemote(doc, state);
     // 切断中に作った変更のうち、サーバが持っていない分を送り返す
     const sv = Y.encodeStateVectorFromUpdate(state);
     const missing = Y.encodeStateAsUpdate(doc, sv);
@@ -103,7 +133,7 @@ export function open(docId, onBlocks, onStatus) {
     notify();
   });
   channel.on("update", (buf) => {
-    Y.applyUpdate(doc, new Uint8Array(buf), REMOTE);
+    applyRemote(doc, new Uint8Array(buf));
   });
 
   channel.onError((reason) => status("error: " + (reason?.reason ?? reason ?? "channel")));

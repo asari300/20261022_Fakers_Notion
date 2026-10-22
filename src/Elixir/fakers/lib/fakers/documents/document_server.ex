@@ -4,7 +4,7 @@ defmodule Fakers.Documents.DocumentServer do
   マージは `Fakers.Native`（Rust の純関数）に任せる（ADR-0003）。
 
   - 名前は `{:via, Registry, {Fakers.Documents.Registry, id}}`。`Fakers.Documents.Supervisor`（DynamicSupervisor）の下で `restart: :transient`
-  - 更新で `dirty` にし、`flush_ms` 後にまとめて DB に書く（debounce）
+  - 更新で `dirty` にし、`flush_ms` 後にまとめて DB に書く（debounce）。そのとき最初の見出しの文字列を `title` 列にも写す
   - `idle_ms` の間なにも来なければ flush して `:normal` で止まる
   - 状態の map に `:vsn` を持ち `code_change/3` を実装する。これがホットスワップの足場
   """
@@ -95,7 +95,7 @@ defmodule Fakers.Documents.DocumentServer do
 
     {1, _} =
       Repo.update_all(from(d in Document, where: d.id == ^s.id),
-        set: [state: s.state, updated_at: now]
+        set: [state: s.state, updated_at: now] ++ title_set(s.state)
       )
 
     %{s | dirty: false}
@@ -104,6 +104,17 @@ defmodule Fakers.Documents.DocumentServer do
       # 書けなくても落とさない（次の flush か停止でもう一度試す）
       Logger.error("DocumentServer #{s.id}: flush に失敗 #{Exception.message(e)}")
       s
+  end
+
+  # 最初の見出しの文字列を title にする。見出しが無ければ title は変えない
+  defp title_set(state) do
+    with {:ok, json} <- Native.blocks_json(state),
+         {:ok, blocks} <- :fakers_shared@block.decode_blocks(json),
+         {:block, _, :heading, text} <- Enum.find(blocks, &match?({:block, _, :heading, _}, &1)) do
+      [title: text]
+    else
+      _ -> []
+    end
   end
 
   defp flush_ms, do: Keyword.fetch!(Application.fetch_env!(:fakers, Fakers.Documents), :flush_ms)

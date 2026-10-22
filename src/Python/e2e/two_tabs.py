@@ -6,7 +6,10 @@ Phoenix を PORT=4100（E2E_PORT で変更可）で起動し、Playwright の Ch
   2. タブ 2 で同じ URL を開く → 同じ 2 ブロックが出る
   3. タブ 1 の段落に入力 → タブ 2 に反映される（5 s 以内。実測の遅れを表示する）
   4. タブ 1 で Enter → 新しいブロックが両方に現れる。タブ 2 で入力、タブ 1 で種別を見出しに → 反映
-  5. サーバを止めて起動し直し、両タブをリロード → 3 ブロックと内容が残っている
+  5. タブ 1 の段落でキャレットを途中に置き、タブ 2 が先頭に挿入 → タブ 1 のキャレットは挿入分だけ後ろへずれ、末尾へ飛ばない
+  6. タブ 1 で見出しを書き換える → flush の後、ページ一覧の API の title も変わる
+  7. サーバを止めて起動し直し、両タブをリロード → 3 ブロックと内容が残っている
+  8. サーバを止めたままタブ 1 で入力し、サーバを起動 → 再接続後にタブ 2 へ届く（切断中の差分の復元）
 
   uv run python src/Python/e2e/two_tabs.py        # mise run test:e2e（build:web の後）
 サーバのログは log/local/e2e-server.log（git 管理外）。
@@ -19,6 +22,7 @@ import re
 import signal
 import subprocess
 import sys
+import json
 import time
 import urllib.request
 from pathlib import Path
@@ -109,7 +113,32 @@ def main() -> int:
             t1.locator(".block-toggle").nth(2).click()
             expect(t2.locator(".block").nth(2)).to_have_class(re.compile(r"block-heading"), timeout=5_000)
 
-            # 5. 再起動後も残る（debounce の flush を待ってから止める）
+            # 5. リモートの挿入でキャレットが飛ばない
+            para1.evaluate("el => { el.focus(); el.setSelectionRange(5, 5); }")
+            para2 = inputs2.nth(1)
+            para2.click()
+            para2.press("Home")
+            para2.press_sequentially("AB")
+            expect(para1).to_have_value("ABhello from tab 1", timeout=5_000)
+            caret = para1.evaluate("el => [document.activeElement === el, el.selectionStart, el.selectionEnd]")
+            assert caret == [True, 7, 7], f"キャレットが保たれていない: {caret}"
+
+            # 6. 見出し → title 列
+            head1 = inputs1.nth(0)
+            head1.click()
+            head1.press("End")
+            head1.press_sequentially("!")
+            title += "!"
+            deadline = time.time() + 10
+            while time.time() < deadline:
+                pages = json.load(urllib.request.urlopen(f"{BASE}/api/pages", timeout=5))
+                if any(p["title"] == title for p in pages):
+                    break
+                time.sleep(0.3)
+            else:
+                raise AssertionError(f"title が {title!r} にならない")
+
+            # 7. 再起動後も残る（debounce の flush を待ってから止める）
             time.sleep(1.5)
             stop_server(proc)
             proc = start_server()
@@ -118,12 +147,27 @@ def main() -> int:
                 ins = t.locator(".block-input")
                 expect(ins).to_have_count(3, timeout=20_000)
                 expect(ins.nth(0)).to_have_value(title)
-                expect(ins.nth(1)).to_have_value("hello from tab 1")
+                expect(ins.nth(1)).to_have_value("ABhello from tab 1")
                 expect(ins.nth(2)).to_have_value("from tab 2")
                 expect(t.locator(".block").nth(2)).to_have_class(re.compile(r"block-heading"))
                 expect(t.locator(".status")).to_contain_text("joined", timeout=10_000)
+
+            # 8. 切断中の編集が再接続後に届く
+            stop_server(proc)
+            expect(t1.locator(".status")).not_to_contain_text("joined", timeout=10_000)
+            para1 = t1.locator(".block-input").nth(1)
+            para1.click()
+            para1.press("End")
+            para1.press_sequentially(" offline")
+            proc = start_server()
+            started = time.perf_counter()
+            expect(t2.locator(".block-input").nth(1)).to_have_value("ABhello from tab 1 offline", timeout=30_000)
+            reconnect_ms = (time.perf_counter() - started) * 1000
             browser.close()
-        print(f"OK e2e: {url} / tab1→tab2 {latency_ms:.0f} ms / 3 ブロックが再起動後も残った")
+        print(
+            f"OK e2e: {url} / tab1→tab2 {latency_ms:.0f} ms / キャレット保持 / title 同期 / "
+            f"再起動後も残った / 切断中の編集が再接続後 {reconnect_ms:.0f} ms で届いた"
+        )
         return 0
     finally:
         stop_server(proc)
