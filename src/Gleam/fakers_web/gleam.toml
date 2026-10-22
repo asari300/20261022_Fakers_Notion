@@ -1,6 +1,7 @@
 name = "fakers_web"
 version = "0.1.0"
 description = "Fakers Notion の SPA（Lustre、JavaScript ターゲット）。yjs と Phoenix の JS は FFI の中だけで触る"
+licences = ["MIT", "Apache-2.0"]
 target = "javascript"
 
 [javascript]

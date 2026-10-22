@@ -44,4 +44,6 @@ mise run test                            # Rust / Gleam / Elixir / 2 タブの E
 mise run dev                             # SPA を束ねて http://localhost:4000
 ```
 
-ライセンスは未定（[roadmap.md](doc/roadmap.md) の P1 で決める）。
+ライセンスは MIT OR Apache-2.0（[LICENSE-MIT](LICENSE-MIT)、[LICENSE-APACHE](LICENSE-APACHE)）。寄稿も同じ条件で受け入れる。
+
+Licensed under either of MIT or Apache-2.0 at your option.

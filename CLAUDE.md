@@ -27,7 +27,7 @@ uv sync                               # worktree ごとに必須
 - **main は直接 push する**（GlobeMode と同じ運用。PR は使わない）。
   - 手順: 検査を通した feature ブランチを main に `--no-ff` でマージし、`git push origin main` する（`/finish-session` の 6）。
   - feature ブランチ自体は push しない。
-  - CI は **まだ無い**（P1 で足す。[roadmap.md](doc/roadmap.md)）。CI ができるまでは、push が通ったら次の 7 に進む。
+  - CI は `.github/workflows/ci.yml`（[ADR-0006](doc/adr/0006-license-and-ci.md)）。push したら `gh run watch` で結果を確かめる。
   - push が通ったら（CI ができたら CI が成功したら）、最新から数えて 2 つ以上前の worktree を片付ける（`/finish-session` の 7）。
 - main に未コミットの変更があったら、そこで止めてユーザーに伝える。勝手にコミットも stash もしない。
 

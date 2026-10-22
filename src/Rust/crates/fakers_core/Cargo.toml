@@ -4,6 +4,7 @@ description = "Fakers Notion のコア: yrs の上のブロック文書モデル
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 yrs = { workspace = true }

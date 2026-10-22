@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S003 ライセンスと CI — Fakers Notion</title>
+<link rel="stylesheet" href="../../assets/slides.css">
+</head>
+<body data-deck="Fakers Notion S003 ライセンスと CI">
+
+<section class="slide" id="S01">
+  <span class="tag">S003 · 2026-10-22 · P1</span>
+  <h1>ライセンスと CI</h1>
+  <p class="lead">P1 の残りを片付けた</p>
+  <div class="big"><b>MIT OR Apache-2.0</b> に決め、GitHub Actions の <b>CI</b> を足した</div>
+</section>
+
+<section class="slide" id="S02">
+  <span class="tag">決定と理由</span>
+  <h1>決めたこと</h1>
+  <table class="compact">
+    <tr><th>項目</th><th>決定</th><th>理由</th></tr>
+    <tr><td>ライセンス（ユーザー）</td><td>MIT OR Apache-2.0</td><td>GlobeMode と同じ。Apache-2.0 は特許条項を含む</td></tr>
+    <tr><td>CI の範囲</td><td>毎回 <code>mise run test</code> と <code>docs:check</code> の全部</td><td>まず動かす。遅くなったら差分方式（GlobeMode ADR-0006）</td></tr>
+    <tr><td>runner</td><td>ubuntu-24.04（x86_64）</td><td>開発機の aarch64 とは別の環境でも通ることを確かめる</td></tr>
+  </table>
+</section>
+
+<section class="slide" id="S03">
+  <span class="tag">再現手順</span>
+  <h1>再現と次回</h1>
+  <pre><code>gh run list --branch main --limit 3
+gh run watch &lt;run-id&gt; --exit-status</code></pre>
+  <ul>
+    <li>結果は作業記録に書いた</li>
+    <li>次: P2（contenteditable、Presence、title の同期、再接続の E2E）</li>
+  </ul>
+</section>
+
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

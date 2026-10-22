@@ -3,6 +3,8 @@ name = "fakers-notion"
 version = "0.1.0"
 description = "Fakers Notion — a Notion-like collaborative editor (Python tooling)"
 readme = "README.md"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 authors = [
     { name = "asari300", email = "nk.mwhrskaomr.93@gmail.com" }
 ]
