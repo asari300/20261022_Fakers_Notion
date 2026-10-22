@@ -1,0 +1,294 @@
+/*
+ * Fakers Notion セッションスライドの共通スタイル。
+ * 全デッキがこの1ファイルだけを読む。デッキごとの <style> や style= は書かない。
+ * 色は必ず下の CSS 変数を使う（ライトとダークの両方で読めるように）。
+ */
+
+:root {
+  color-scheme: light dark;
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --fg: #16202c;
+  --muted: #5b6878;
+  --line: #d5dbe3;
+  --accent: #1f6feb;
+  --accent-2: #0f8a72;
+  --warn: #b35900;
+  --ng: #c62d42;
+  --ok: #1a7f37;
+  --code-bg: #eef1f5;
+  --shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 4px 16px rgb(0 0 0 / 6%);
+  --font: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Code", "JetBrains Mono", "Noto Sans Mono CJK JP", ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --fg: #e6edf3;
+    --muted: #9aa7b4;
+    --line: #30363d;
+    --accent: #58a6ff;
+    --accent-2: #3fb9a0;
+    --warn: #e3a34a;
+    --ng: #ff7b8a;
+    --ok: #56d364;
+    --code-bg: #1c232c;
+    --shadow: none;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --fg: #e6edf3;
+  --muted: #9aa7b4;
+  --line: #30363d;
+  --accent: #58a6ff;
+  --accent-2: #3fb9a0;
+  --warn: #e3a34a;
+  --ng: #ff7b8a;
+  --ok: #56d364;
+  --code-bg: #1c232c;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  line-height: 1.55;
+}
+
+body { overflow: hidden; }
+
+/* ------------------------------------------------------------------ スライド */
+
+.slide {
+  display: none;
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  padding: 5.5vh 6vw 9vh;
+  overflow: auto;
+  font-size: clamp(15px, 1.45vw, 26px);
+}
+
+.slide.on { display: block; }
+
+.slide h1 {
+  margin: 0.2em 0 0.25em;
+  font-size: 2.05em;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+.slide h2 { margin: 0.8em 0 0.3em; font-size: 1.2em; }
+.slide h3 { margin: 0.6em 0 0.2em; font-size: 1em; color: var(--accent); }
+.slide p { margin: 0.4em 0; }
+.slide ul, .slide ol { margin: 0.3em 0; padding-left: 1.3em; }
+.slide li { margin: 0.18em 0; }
+.slide a { color: var(--accent); }
+.slide strong { color: var(--fg); }
+
+.tag {
+  display: inline-block;
+  padding: 0.1em 0.6em;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.lead { margin: 0 0 1em; color: var(--muted); font-size: 1.05em; }
+.muted { color: var(--muted); }
+.small { font-size: 0.8em; }
+
+.ok { color: var(--ok); font-weight: 700; }
+.warn { color: var(--warn); font-weight: 700; }
+.ng { color: var(--ng); font-weight: 700; }
+.accent { color: var(--accent); font-weight: 700; }
+
+/* ------------------------------------------------------------------ レイアウト部品 */
+
+.cols-2, .cols-3 { display: grid; gap: 1.2em; align-items: start; }
+.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.card {
+  padding: 0.8em 1em;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+.card.hl { border-color: var(--accent); }
+
+.big {
+  margin: 14vh auto 0;
+  max-width: 34em;
+  font-size: 1.6em;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.big b { color: var(--accent); }
+
+.kpis { display: flex; flex-wrap: wrap; gap: 0.8em; margin: 0.6em 0; }
+
+.kpi {
+  flex: 1 1 8em;
+  padding: 0.6em 0.8em;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.kpi .n { display: block; font-size: 1.8em; font-weight: 700; line-height: 1.2; color: var(--accent); }
+.kpi .l { display: block; color: var(--muted); font-size: 0.8em; }
+
+/* ------------------------------------------------------------------ 表・コード */
+
+table { width: 100%; border-collapse: collapse; margin: 0.4em 0; }
+th, td { padding: 0.35em 0.55em; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; border-bottom-width: 2px; }
+table.compact { font-size: 0.82em; }
+table.compact th, table.compact td { padding: 0.22em 0.45em; }
+
+code, pre { font-family: var(--mono); }
+code { padding: 0.05em 0.3em; border-radius: 4px; background: var(--code-bg); font-size: 0.9em; }
+
+pre {
+  margin: 0.5em 0;
+  padding: 0.8em 1em;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--code-bg);
+  font-size: 0.78em;
+  line-height: 1.5;
+}
+
+pre code { padding: 0; background: none; font-size: 1em; }
+
+/* ------------------------------------------------------------------ インライン SVG の図 */
+
+svg.fig { display: block; width: 100%; height: auto; max-height: 62vh; margin: 0.4em auto; }
+svg.fig text { font-family: var(--font); }
+.svg-box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.svg-box-accent { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }
+.svg-box-accent2 { fill: var(--panel); stroke: var(--accent-2); stroke-width: 2; }
+.svg-box-warn { fill: var(--panel); stroke: var(--warn); stroke-width: 2; stroke-dasharray: 6 4; }
+.svg-band { fill: var(--code-bg); stroke: none; }
+.svg-line { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+.svg-line-accent { fill: none; stroke: var(--accent); stroke-width: 2; }
+.svg-text { fill: var(--fg); font-size: 15px; }
+.svg-text-b { fill: var(--fg); font-size: 16px; font-weight: 700; }
+.svg-text-m { fill: var(--muted); font-size: 13px; }
+.svg-text-a { fill: var(--accent); font-size: 14px; font-weight: 700; }
+.svg-node { fill: var(--accent); }
+.svg-node-2 { fill: var(--accent-2); }
+.svg-node-3 { fill: var(--warn); }
+.svg-arrowhead { fill: var(--muted); }
+
+/* ------------------------------------------------------------------ フッターと操作 */
+
+.foot {
+  position: absolute;
+  left: 6vw;
+  right: 6vw;
+  bottom: 2.6vh;
+  display: flex;
+  justify-content: space-between;
+  padding-top: 0.5em;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.68em;
+  /* 右下の操作ボタン（.ctl）にページ番号が隠れないよう、右側を空ける */
+  padding-right: 200px;
+  gap: 1em;
+}
+
+.foot span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.foot span:last-child { flex: none; }
+
+.progress {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 3px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+  z-index: 20;
+}
+
+.ctl {
+  position: fixed;
+  right: 1.2vw;
+  bottom: 1.4vh;
+  display: flex;
+  gap: 0.4em;
+  z-index: 20;
+}
+
+.ctl button {
+  min-width: 2.6em;
+  padding: 0.35em 0.7em;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ctl button:hover { border-color: var(--accent); }
+
+/* 一覧表示（p キー） */
+body.overview { overflow: auto; }
+body.overview .deck { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; padding: 16px; }
+
+body.overview .slide {
+  display: block;
+  width: auto;
+  height: 220px;
+  padding: 14px 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+body.overview .slide.on { border-color: var(--accent); }
+body.overview .foot { display: none; }
+
+/* 狭い画面（スマートフォン） */
+@media (max-width: 720px) {
+  .slide { padding: 4vh 16px 12vh; font-size: 15px; }
+  .cols-2, .cols-3 { grid-template-columns: 1fr; }
+  .foot { left: 16px; right: 16px; padding-right: 210px; }
+  /* 横長の図は縮めずに、スライドの中で横にスクロールさせる（文字が読める大きさを保つ） */
+  svg.fig { min-width: 760px; max-height: none; }
+  .big { margin-top: 6vh; font-size: 1.3em; }
+}
+
+/* 印刷: 1 枚 1 ページ */
+@media print {
+  @page { size: landscape; margin: 0; }
+  body { overflow: visible; }
+  .slide { display: block; height: 100vh; break-after: page; overflow: hidden; }
+  .ctl, .progress { display: none; }
+}

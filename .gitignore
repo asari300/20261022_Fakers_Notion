@@ -1,10 +1,41 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
-
-# Virtual environments
 .venv
+
+# Rust（workspace の target は src/Rust/target に 1 つ）
+src/Rust/target/
+
+# Node（src/Gleam/fakers_web など）。Gleam の build/ は上の build/ で除外される
+node_modules/
+
+# Phoenix が生成するもの（src/Elixir/fakers/ の .gitignore が _build/ deps/ *.db を除外する）
+src/Elixir/fakers/priv/native/
+src/Elixir/fakers/priv/static/assets/
+
+# 作業用 git worktree の置き場所（feature ブランチごとに作る。リポジトリの外に置かない）
+.git-worktree/
+
+# セッション記録の生ログとローカル整形版（フックの出力先）。
+# 伏せ字済みの整形版だけを finish-session で log/sessions/ にコピーしてコミットする。
+log/local/
+
+# mise
+mise.local.toml
+mise.local.lock
+
+# Claude Code
+# .claude/settings.json、.claude/hooks/、.claude/skills/ はリポジトリで共有する。
+# 以下は機密情報・ローカル実行状態なので絶対にコミットしない。
+.claude/.credentials.json
+.claude/settings.local.json
+.claude/projects/
+.claude/sessions/
+.claude/session-env/
+.claude/shell-snapshots/
+.claude/backups/
+.claude/ide/
