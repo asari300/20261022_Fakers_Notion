@@ -70,7 +70,7 @@ flowchart LR
 ### S003（P1 の 2 回目、2026-10-22）で済んだこと
 
 - ライセンスを MIT OR Apache-2.0 に決めた（ユーザー）。`LICENSE-MIT` / `LICENSE-APACHE` と各マニフェストの license 欄。[ADR-0006](adr/0006-license-and-ci.md)。
-- CI（`.github/workflows/ci.yml`）を足した。結果は [作業記録](../log/work/2026-10-22-s003-ci-license.md)。
+- CI（`.github/workflows/ci.yml`）を足し、main で成功した（run 39760909180: test 2 分 23 秒、docs 58 秒）。**P1 の完了条件はすべて満たした。**
 
 ### S003 以降の候補（P1 の残り・旧）
 
