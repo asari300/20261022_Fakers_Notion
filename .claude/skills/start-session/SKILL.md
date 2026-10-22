@@ -22,12 +22,13 @@ orca が作った worktree（`~/orca/workspaces/<repo>/<名前>`、ブランチ 
 ```bash
 MAIN=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
 TOPIC=sNNN-<topic>
-WT="$MAIN/.git-worktree/$TOPIC"
+WT="/mnt/usb_sd64c/Fakers_Notion/worktrees/$TOPIC"   # 実体は USB。$MAIN/.git-worktree/$TOPIC は symlink
 
 cd "$MAIN"
 git worktree list                      # 同名が無いか確認
 git status --porcelain                 # main 側に未コミットの変更が無いか確認
 git worktree add -b "feature/$TOPIC" "$WT" main
+ln -s "$WT" "$MAIN/.git-worktree/$TOPIC"
 cd "$WT" && mise trust && mise install --locked && uv sync
 ```
 
