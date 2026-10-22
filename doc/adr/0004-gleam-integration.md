@@ -1,6 +1,6 @@
 # ADR-0004 Gleam は mix.exs のカスタムコンパイラで組み込み、UI は Lustre + esbuild
 
-- 状態: **Proposed**（2026-10-22、S001）。S002 で Rust → Erlang → Gleam のデコードテストと Lustre の 2 タブ同期が通ったら Accepted にする。
+- 状態: **Accepted**（2026-10-22、S002）。S001 で Proposed。S002 で Rust → Erlang → Gleam のデコード（`mix test` の `native_test`）と Lustre の 2 タブ同期（E2E）が通ったので Accepted にした。
 
 ## 背景
 
@@ -26,3 +26,12 @@
 - Phoenix の `mix phx.new` のフラグ: `--database sqlite3 --binary-id --no-html --no-live --no-assets --no-mailer --no-gettext --no-dashboard --no-agents-md --no-install`。
 - 自動リビルド（`watchers:`）は任意。`fs.watch` → gleam build → esbuild の小さな node スクリプトで足せる（S002 の最後）。
 - lustre_dev_tools を使いたくなったら、まず 16K ページで Bun が動くか試す。
+
+## S002 で確かめたこと（2026-10-22）
+
+- `mix.exs` の中で定義した `Mix.Tasks.Compile.GleamShared` は `compilers: [:gleam_shared] ++ Mix.compilers()` で拾われた（エイリアスの代替案は不要だった）。`gleam build --target erlang` は 2 回目以降 0.1 s 程度。
+- Elixir から `:fakers_shared@block.decode_blocks(json)` が `{:ok, [{:block, "h1", :heading, "T"}, …]}` を返した。
+- `fakers_web`（JavaScript ターゲット）は path 依存の `fakers_shared` を JS 向けにコンパイルし、同じ `decode_blocks` を使う。gleeunit は両ターゲットで通った（fakers_shared 6 本 × 2、fakers_web 10 本）。
+- esbuild 0.28.2 のバンドルは 507.6 KB（dev、minify 無し。`--minify` で約 182 KB）。`app.css` は `build:web` でコピーする。
+- Lustre 5.7.1: `lustre.application(init, update, view) |> lustre.start("#app", Nil)`。Enter は `event.on_keydown` ではなく `event.advanced("keydown", …)` で `isComposing` を見て `preventDefault` する。
+- Phoenix の `Plug.Static` の `only:` から `fonts` と `images` を外した（ディレクトリが無く、dev では `raise_on_missing_only` が効くため）。`/` と `/p/*` は `PageController` が `priv/static/index.html` を返す。

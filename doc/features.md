@@ -12,9 +12,9 @@ Notion を参考に、Fakers Notion に要る機能を洗い出した。Phase �
 
 | 機能 | 優先度 | Phase | Fakers Notion での方針 |
 | --- | --- | --- | --- |
-| ページの作成・一覧・開く | Must | P1（S002） | `GET/POST /api/pages`、Lustre の一覧 |
-| 段落・見出しブロックの編集 | Must | P1（S002） | `Y.Array("blocks")` の `Y.Map{id,type,text:Y.Text}`。[architecture.md](architecture.md#4-ブロックモデルと-json-の契約) |
-| Enter で新しいブロック、種別の切り替え | Must | P1（S002） | FFI の `insert_block_after` / `set_kind` |
+| ページの作成・一覧・開く | Must | P1（S002 で済） | `GET/POST /api/pages`、Lustre の一覧 |
+| 段落・見出しブロックの編集 | Must | P1（S002 で済） | `Y.Array("blocks")` の `Y.Map{id,type,text:Y.Text}`。[architecture.md](architecture.md#4-ブロックモデルと-json-の契約) |
+| Enter で新しいブロック、種別の切り替え（削除も） | Must | P1（S002 で済） | FFI の `insert_block_after` / `set_kind` |
 | リスト・ToDo・コード・引用・区切り・トグル | Must | P2 | `type` の追加。`text` 以外の属性（checked など）は `Y.Map` のキー |
 | キャレットを保つ編集（contenteditable） | Should | P2 | P1 は controlled input。リモート編集でキャレットが末尾に飛ぶ既知の制限 |
 | ブロックの並べ替え（ドラッグ） | Should | P2 | `Y.Array` の move。yjs の move は実験的なので、delete + insert で代用【未確認】 |
@@ -27,9 +27,9 @@ Notion を参考に、Fakers Notion に要る機能を洗い出した。Phase �
 
 | 機能 | 優先度 | Phase | 方針 |
 | --- | --- | --- | --- |
-| リアルタイム同期（複数タブ・複数人） | Must | P1（S002） | Phoenix Channel のバイナリ、yjs / yrs の update v1 |
-| 再起動しても残る | Must | P1（S002） | `DocumentServer` の flush → SQLite |
-| 切断中の編集の回復 | Must | P1（S002） | `sync` の state vector から差分を push |
+| リアルタイム同期（複数タブ・複数人） | Must | P1（S002 で済。タブ間 約 5 ms） | Phoenix Channel のバイナリ、yjs / yrs の update v1 |
+| 再起動しても残る | Must | P1（S002 で済） | `DocumentServer` の flush → SQLite |
+| 切断中の編集の回復 | Must | P1（S002 で実装。E2E では未検証） | `sync` の state vector から差分を push |
 | Presence（誰が開いているか）とカーソル | Should | P2 | `Phoenix.Presence` と yjs の awareness |
 | 履歴（版の比較と復元） | Could | P6 | yrs の snapshot【未確認】 |
 | コメント | Could | — | 未定 |

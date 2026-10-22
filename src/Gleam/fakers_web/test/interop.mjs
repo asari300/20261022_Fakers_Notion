@@ -1,0 +1,47 @@
+// 相互運用ゲート（ADR-0003 を Accepted にする条件）。
+//   1. yrs（Rust）が作ったページの状態を yjs に適用でき、ブロックの形が同じ
+//   2. yjs の編集（update v1）を yrs に戻して適用でき、文字が入る
+// 実行: node test/interop.mjs（mise run test:interop）。cargo を子プロセスで呼ぶ。
+import { execFileSync } from "node:child_process";
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import * as Y from "yjs";
+
+const manifest = fileURLToPath(new URL("../../../Rust/Cargo.toml", import.meta.url));
+const cargo = (example, args, input) =>
+  execFileSync(
+    "cargo",
+    ["run", "-q", "--manifest-path", manifest, "-p", "fakers_core", "--example", example, "--", ...args],
+    { input, encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] },
+  );
+const fromHex = (s) => Uint8Array.from(s.trim().match(/../g).map((h) => parseInt(h, 16)));
+const toHex = (u8) => Array.from(u8, (b) => b.toString(16).padStart(2, "0")).join("");
+const snapshot = (doc) =>
+  doc.getArray("blocks").toArray().map((m) => ({ id: m.get("id"), type: m.get("type"), text: m.get("text").toString() }));
+
+// 1. yrs → yjs
+const stateHex = cargo("dump_page", ["Interop"]);
+const doc = new Y.Doc();
+Y.applyUpdate(doc, fromHex(stateHex));
+const blocks = snapshot(doc);
+assert.deepEqual(blocks, [
+  { id: "h1", type: "heading", text: "Interop" },
+  { id: "p1", type: "paragraph", text: "" },
+]);
+
+// 2. yjs → yrs（絵文字で UTF-16 の位置も確かめる）
+const svBefore = Y.encodeStateVector(doc);
+const para = doc.getArray("blocks").get(1).get("text");
+para.insert(0, "hello 😀");
+para.insert(8, "!"); // 😀 は UTF-16 で 2 単位なので "hello 😀" は 8
+const update = Y.encodeStateAsUpdate(doc, svBefore);
+const json = cargo("apply_hex", [], `${stateHex.trim()}\n${toHex(update)}\n`);
+const parsed = JSON.parse(json);
+assert.equal(parsed[1].text, "hello 😀!");
+assert.deepEqual(parsed, snapshot(doc));
+
+// 3. yjs の全状態をそのまま yrs に渡しても同じ
+const full = cargo("apply_hex", [], `\n${toHex(Y.encodeStateAsUpdate(doc))}\n`);
+assert.deepEqual(JSON.parse(full), snapshot(doc));
+
+console.log(`OK interop: yrs→yjs ${JSON.stringify(blocks)} / yjs→yrs text=${JSON.stringify(parsed[1].text)} / update ${update.length} bytes, clientID ${doc.clientID}`);

@@ -1,0 +1,11 @@
+name = "fakers_shared"
+version = "0.1.0"
+description = "Fakers Notion の、Erlang と JavaScript の両ターゲットで共有する型（ブロック、ページ）。FFI を置かない"
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = ">= 0.44.0 and < 2.0.0"
+gleam_json = ">= 3.0.0 and < 4.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"

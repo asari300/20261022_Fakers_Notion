@@ -1,0 +1,3 @@
+[build]
+# Raspberry Pi の RAM を使い切らないように並列を 2 に絞る（mise.toml の CARGO_BUILD_JOBS と同じ）
+jobs = 2

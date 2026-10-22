@@ -1,6 +1,6 @@
 # Fakers Notion アーキテクチャ
 
-- 版: v0（2026-10-22、S001）。P1 の縦スライスの設計。実装で変わった点は S002 以降で直す。
+- 版: v1（2026-10-22、S002）。S001 の設計を S002 で実装し、実装で分かった点を直した。
 - 判断の理由は [adr/](adr/) に、機能の一覧は [features.md](features.md) に、順序は [roadmap.md](roadmap.md) にある。版と API の根拠は [research/stack.md](research/stack.md)。
 
 ## 1. 全体像
@@ -65,7 +65,7 @@ doc/  log/                      文書と記録
 
 - CRDT: 根の `Y.Array("blocks")` に `Y.Map{ "id": string, "type": "paragraph" | "heading", "text": Y.Text }` を並べる。
 - 位置は **UTF-16** で数える（yjs の規則）。yrs 側は `Options { offset_kind: OffsetKind::Utf16 }` で `Doc` を作る。
-- JSON の形は Rust の `blocks_json` と JS の FFI の両方が同じものを出す:
+- JSON の形は Rust の `blocks_json` と JS の FFI の両方が同じものを出す（キーの順は問わない。Rust は `id, text, type` の辞書順で出す）:
 
   ```json
   [{"id":"…","type":"heading","text":"My page"},{"id":"…","type":"paragraph","text":""}]
@@ -102,7 +102,8 @@ pub fn edit_text(state: &[u8], block_id: &str, utf16_index: u32, insert: &str)
 
 - `Fakers.Application` の children: `Repo`、`Phoenix.PubSub`、`{Registry, keys: :unique, name: Fakers.Documents.Registry}`、`{DynamicSupervisor, name: Fakers.Documents.Supervisor}`、`Endpoint`。
 - `DocumentServer`: `restart: :transient`、`{:via, Registry, {Fakers.Documents.Registry, id}}`。`init` で DB から状態を読み、`Process.flag(:trap_exit, true)`。API は `get_state/1`、`apply_update/2`、`flush/1`、`stop/1`。状態の map に `:vsn` を持ち、`code_change/3` を実装する（ホットスワップの足場）。
-- `DocumentChannel`: `"doc:*"`。認証は P4 まで無し。
+- `DocumentChannel`: `"doc:*"`。認証は P4 まで無し。`join` は UUID でない id や無いページを `not_found` で断る。
+- `Fakers.Documents` の `apply_update/2` と `document_state/1` は毎回 `ensure_server/1` を通る（idle で止まった直後の呼び出しも起動し直す）。
 - `UserSocket`: `channel "doc:*", FakersWeb.DocumentChannel`。`endpoint.ex` に `socket "/socket", FakersWeb.UserSocket, websocket: true`。
 
 ## 7. ホットスワップと分散の方針
@@ -116,7 +117,15 @@ pub fn edit_text(state: &[u8], block_id: &str, utf16_index: u32, insert: &str)
 | --- | --- | --- |
 | `mise run doctor` | ツールの版の表示 | S001 |
 | `mise run docs:check` | スライド・リンクの検査、Playwright でのブラウザ表示 | S001 |
-| `mise run test` | `test:rust`（fmt / clippy / test）、`test:interop`（yrs → yjs）、`test:shared`（gleam test、両ターゲット）、`test:web`、`test:elixir`（mix test） | S002 |
+| `mise run test` | `test:rust`（fmt / clippy / test）、`test:interop`（yrs ⇄ yjs の両方向）、`test:shared`（gleam test、両ターゲット）、`test:web`（FFI の差分計算とルート）、`test:elixir`（mix test。NIF と Gleam のビルドを含む）、`test:e2e`（Playwright で 2 タブ。PORT=4100 で Phoenix を起動する） | S002 |
 | `mise run build` / `mise run dev` | gleam build → esbuild → `mix phx.server` | S002 |
 
 機械は Raspberry Pi 500（aarch64、4 コア、RAM 8 GB、16K ページのカーネル、ディスクの空き約 9 GB）。`CARGO_BUILD_JOBS=2`、Cargo の target は 1 つ、依存は最小にする。
+
+## 9. クライアント（Lustre の SPA）の構成
+
+- `src/fakers_web.gleam`: `Model(route, pages, blocks, status, draft_title, session, error)`。`update` は純粋で、セッションの操作はすべて `effect.from` の中で行う。
+- `src/fakers_web/session.gleam` + `session.ffi.mjs`: `open(doc_id, on_blocks, on_status)`、`set_text`、`insert_block_after`、`set_kind`、`delete_block`、`close`、`focus_block`、純粋な `diff_text`。Session が `Y.Doc`・`Socket`・`Channel` を所有し、Gleam にはブロックの JSON と状態の文字列（`connecting` / `joined` / `error: …` / `closed`）だけを渡す。
+- `src/fakers_web/route.gleam` + `route.ffi.mjs`: `#/` と `#/p/<id>` のハッシュのルーティング。
+- `src/fakers_web/api.gleam`: rsvp で `/api/pages` を読む・作る。
+- ビルド: `gleam build --target javascript` → `esbuild entry.mjs --bundle` → `priv/static/assets/app.js`（507.6 KB、dev）。`app.css` も同じ場所にコピーする。

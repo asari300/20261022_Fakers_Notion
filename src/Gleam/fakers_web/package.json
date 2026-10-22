@@ -1,0 +1,14 @@
+{
+  "name": "fakers_web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fakers Notion の SPA（Lustre）が使う JS の依存: yjs（CRDT）、phoenix（Channel）、esbuild（バンドル）",
+  "dependencies": {
+    "phoenix": "1.8.16",
+    "yjs": "13.6.33"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

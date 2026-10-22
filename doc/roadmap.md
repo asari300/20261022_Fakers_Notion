@@ -17,7 +17,7 @@ flowchart LR
 | Phase | 範囲 | 完了条件 | 目安 |
 | --- | --- | --- | --- |
 | **P0 運用基盤**（S001 で完了） | CLAUDE.md、スキル、セッション記録のフック、正典の文書、ADR、調査、P1 の計画 | フックが伏せ字版を出力する。リンク切れが 0 件。P1 の計画が ADR と調査に裏付けを持つ | S001 |
-| **P1 骨組みと縦スライス** | `mise.toml` のタスク、Rust workspace（`fakers_core`・`fakers_nif`）、Gleam（`fakers_shared`・`fakers_web`）、Phoenix（`fakers`）。ページの作成、ブロックの編集、リアルタイム同期、SQLite への永続化。CI。ライセンス | `mise run test` が 3 言語とも通る。2 つのタブで片方の編集がもう片方に即時反映される。サーバを再起動しても内容が残る。yrs → yjs の相互運用ゲートが通り、[ADR-0003](adr/0003-crdt-yjs-yrs.md) と [ADR-0004](adr/0004-gleam-integration.md) が Accepted になる。CI（GitHub Actions）が main で通る。ライセンスを決める | 2〜3 回（S002 で縦スライス、S003 で CI とライセンス） |
+| **P1 骨組みと縦スライス**（S002 で縦スライスまで完了。残りは CI とライセンス） | `mise.toml` のタスク、Rust workspace（`fakers_core`・`fakers_nif`）、Gleam（`fakers_shared`・`fakers_web`）、Phoenix（`fakers`）。ページの作成、ブロックの編集、リアルタイム同期、SQLite への永続化。CI。ライセンス | `mise run test` が 3 言語とも通る。2 つのタブで片方の編集がもう片方に即時反映される。サーバを再起動しても内容が残る。yrs → yjs の相互運用ゲートが通り、[ADR-0003](adr/0003-crdt-yjs-yrs.md) と [ADR-0004](adr/0004-gleam-integration.md) が Accepted になる。CI（GitHub Actions）が main で通る。ライセンスを決める | 2〜3 回（S002 で縦スライス、S003 で CI とライセンス） |
 | **P2 共同編集の品質** | Presence とカーソル、見出しブロックと `title` 列の同期、キャレットを保つ編集（contenteditable）、切断と再接続のテスト、ブロックの種類の追加（リスト・ToDo・コード・引用・区切り・トグル） | 2 クライアントの同時編集が収束し、入力中のキャレットが飛ばない。再接続後に切断中の差分が復元される | 3 回 |
 | **P3 データベースとフォーミュラ** | Notion 風のデータベース（テーブル・ボード・リストのビュー）、プロパティ、フィルタとソート、フォーミュラ言語（Rust の字句解析・構文解析・型検査・評価） | フォーミュラの例題集が Rust のテストで通る。ビューの切り替えとフィルタが UI で動く | 4 回 |
 | **P4 ワークスペースと権限** | ユーザー、認証、サイドバーとページの階層、共有、権限 | 2 ユーザーで権限の違いが効く | 3 回 |
@@ -56,6 +56,16 @@ flowchart LR
 12. `mise run build | test | dev` の仕上げ、2 タブの手動確認、README の更新。
 
 設計の詳細は [architecture.md](architecture.md)、判断の理由は [ADR-0002](adr/0002-language-roles.md)〜[ADR-0005](adr/0005-persistence-sqlite.md)、版と API の根拠は [research/stack.md](research/stack.md)。
+
+### S002（P1 の 1 回目、2026-10-22）で済んだこと
+
+- 計画の 12 段をすべて実装した。`mise run test` で Rust（7 本）、相互運用ゲート、Gleam（fakers_shared 6 本 × 2 ターゲット、fakers_web 10 本）、Elixir（19 本）、2 タブの E2E が通る。
+- **相互運用ゲートを両方向で通した**（yrs → yjs、yjs → yrs、絵文字を含む）。[ADR-0003](adr/0003-crdt-yjs-yrs.md) と [ADR-0004](adr/0004-gleam-integration.md) を Accepted にした。
+- Rust: `src/Rust` の workspace、`fakers_core`（yrs 0.28、`small-client`、UTF-16、純関数 6 つ）、`fakers_nif`（Rustler 0.38、全部 DirtyCpu）。yrs のビルドは RPi で約 22 s。
+- Elixir: Phoenix 1.8.16（sqlite3、HTML 無し）、`Fakers.Native`、`Mix.Tasks.Compile.GleamShared`、`Documents` と `DocumentServer`（Registry + DynamicSupervisor、debounce の flush、idle 停止、`code_change/3`）、`DocumentChannel`（バイナリの sync / update）、`/api/pages`、`index.html` の配信。exqlite は aarch64 のプリビルド NIF が取れた。
+- Gleam: `fakers_shared`（Block / PageSummary）、`fakers_web`（Lustre 5.7.1 の SPA、FFI の `session.ffi.mjs` が Y.Doc と Socket を所有、ハッシュのルーティング）。esbuild で 507.6 KB に束ねる。
+- E2E: `src/Python/e2e/two_tabs.py`（Playwright）。タブ 1 → タブ 2 の反映は約 5 ms。サーバ再起動後も内容が残る。
+- SPA の実装は Opus（effort medium）のサブエージェントに任せた（約 3 分、ツール呼び出し 12 回）。
 
 ### S003 以降の候補（P1 の残り）
 

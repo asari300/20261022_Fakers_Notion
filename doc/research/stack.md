@@ -74,3 +74,19 @@
 - Raspberry Pi 500（aarch64、Linux 6.12 rpt-rpi-2712、4 コア、RAM 7.9 GiB、16K ページ）。2026-10-22 の時点で空きメモリ 1 GB 未満、ディスクの空き 9.3 GB、Docker 稼働中、Postgres / sqlite3 CLI / just / wasm-pack / wasm-opt は無し。gcc 12.2 と make はある。
 - rustup のターゲット: aarch64-unknown-linux-gnu、wasm32-unknown-unknown、wasm32-wasip2、aarch64-linux-android。wasm-bindgen CLI 0.2.129（mise）。
 - Playwright の Chromium 1248 は GlobeMode の S017 で入っている（`~/.cache/ms-playwright`）。playwright 1.64.0 に対応。
+
+## S002 で確かめたこと（2026-10-22）
+
+| 項目 | 結果 |
+| --- | --- |
+| Rustler の `Result<T, String>` | `{:ok, t}` / `{:error, msg}` にエンコードされた |
+| exqlite の aarch64-linux-gnu プリビルド | `exqlite-nif-2.17-aarch64-linux-gnu-0.43.0.tar.gz` を取得できた（gcc でのビルドは不要） |
+| `rsvp` の関数名 | `get(url, handler)`、`post(url, body, handler)`、`expect_json(decoder, handler)`。`Error(body)` は `BadBody` / `BadUrl` / `HttpError` など |
+| mise の `[settings] jobs` | プロジェクトの `mise.toml` で受け付けられた。`mise run test` の `depends` は jobs = 1 で順に走る |
+| mix.exs の中の `Mix.Tasks.Compile.*` | `compilers:` で拾われた |
+| yrs の `MapPrelim` | `MapPrelim::default()` を `push_back` して `MapRef::insert` で埋める。`TextPrelim::new(text)` を値にできる |
+| yjs の束の大きさ | esbuild で 507.6 KB（dev、minify 無し）、`--minify` で 181.7 KB。yjs + lib0 + phoenix + Lustre + gleam_stdlib を含む |
+| Phoenix JS のバイナリ payload | `channel.push("update", ArrayBuffer)` と `channel.on("sync", buf => new Uint8Array(buf))` で動いた（E2E） |
+| Phoenix の dev の `PORT` | 環境変数 `PORT` でポートを変えられる（E2E は 4100） |
+| yrs のビルド時間 | RPi で依存を含めて約 22 s（`-j 2`、debug）。Phoenix の依存の `deps.compile` は約 26 s |
+| `mix phx.new --no-html` の `static_paths` | `~w(assets fonts images favicon.ico robots.txt)` が生成されるが `fonts` と `images` は無い。`~w(assets favicon.ico robots.txt)` に直した |

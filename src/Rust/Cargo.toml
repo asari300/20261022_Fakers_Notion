@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+# yjs 13.6.x と話すには small-client が要る（doc/research/stack.md）
+yrs = { version = "0.28", default-features = false, features = ["small-client"] }
+# Hex の rustler 0.38.0 と揃える（crate の 0.39 は Hex が追いついたら上げる）
+rustler = "0.38"
+serde_json = "1"
+thiserror = "2"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
