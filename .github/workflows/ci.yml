@@ -1,0 +1,46 @@
+# Fakers Notion の CI。ツールの版は mise.toml / mise.lock、依存は Cargo.lock・mix.lock・manifest.toml・package-lock.json・uv.lock で固定する。
+# shortcut: 毎回全部を検査する。遅くなったら GlobeMode の ADR-0006 のように差分だけにする。
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  MISE_AUTO_INSTALL: "false"
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/Rust
+      - run: mix local.hex --force && mix local.rebar --force
+      - run: mise run setup
+      - run: uv sync --locked
+      - run: uv run playwright install --with-deps chromium
+      - run: mise run test
+
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: uv
+      - run: uv sync --locked
+      - run: uv run playwright install --with-deps chromium
+      - run: mise run docs:check

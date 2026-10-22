@@ -1,6 +1,7 @@
 name = "fakers_shared"
 version = "0.1.0"
 description = "Fakers Notion の、Erlang と JavaScript の両ターゲットで共有する型（ブロック、ページ）。FFI を置かない"
+licences = ["MIT", "Apache-2.0"]
 target = "erlang"
 
 [dependencies]

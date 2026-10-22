@@ -67,7 +67,12 @@ flowchart LR
 - E2E: `src/Python/e2e/two_tabs.py`（Playwright）。タブ 1 → タブ 2 の反映は約 5 ms。サーバ再起動後も内容が残る。
 - SPA の実装は Opus（effort medium）のサブエージェントに任せた（約 3 分、ツール呼び出し 12 回）。
 
-### S003 以降の候補（P1 の残り）
+### S003（P1 の 2 回目、2026-10-22）で済んだこと
+
+- ライセンスを MIT OR Apache-2.0 に決めた（ユーザー）。`LICENSE-MIT` / `LICENSE-APACHE` と各マニフェストの license 欄。[ADR-0006](adr/0006-license-and-ci.md)。
+- CI（`.github/workflows/ci.yml`）を足した。結果は [作業記録](../log/work/2026-10-22-s003-ci-license.md)。
+
+### S003 以降の候補（P1 の残り・旧）
 
 - CI（GitHub Actions、aarch64 ではなく x86_64 の runner。差分だけを検査する GlobeMode の ADR-0006 の方式を移すかは、そのときに決める）。
 - ライセンスの決定（未定。GlobeMode は MIT OR Apache-2.0）。

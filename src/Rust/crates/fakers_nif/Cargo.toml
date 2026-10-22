@@ -4,6 +4,7 @@ description = "fakers_core を Elixir に見せる Rustler の NIF（薄い皮�
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 crate-type = ["cdylib"]
