@@ -42,6 +42,7 @@ uv sync                               # worktree ごとに必須
 | `src/Gleam/fakers_shared/` | Erlang と JavaScript の両ターゲットで共有する型（ブロック、ページ）。**FFI を置かない** | ○ |
 | `src/Gleam/fakers_web/` | Lustre の SPA（JavaScript ターゲット）。yjs と Phoenix の JS は FFI の中だけで触る | ○ |
 | `src/Python/mod/` | Python パッケージ `fakers_notion`（ツール用途。製品のロジックを置かない） | ○ |
+| `src/Python/e2e/` | Playwright の E2E（`mise run test:e2e`。Phoenix を PORT=4100 で起動する） | ○ |
 | `doc/architecture.md` `roadmap.md` `features.md` | **正典**。計画を変えたら同じコミットで直す | ○ |
 | `doc/adr/` | 設計判断の記録。覆すときは消さずに Superseded にする | ○（追記） |
 | `doc/research/` | 調査の記録。事実ごとに URL と確認日を付ける | ○ |
@@ -51,7 +52,7 @@ uv sync                               # worktree ごとに必須
 | `log/sessions/` | 伏せ字にしたセッション記録（コミットする） | ×（finish-session がコピーする） |
 | `log/local/` | フックの出力。生ログを含む | ×（**コミットしない**） |
 
-- 検査はまとめて `mise run test`（S002 から。Rust の fmt / clippy / test、Gleam の両ターゲットのテスト、Elixir の `mix test`）と `mise run docs:check`（スライドとリンク、Playwright）で回す。
+- 検査はまとめて `mise run test`（Rust の fmt / clippy / test、yrs ⇄ yjs の相互運用、Gleam の両ターゲットのテスト、Elixir の `mix test`、2 タブの E2E）と `mise run docs:check`（スライドとリンク、Playwright）で回す。開発サーバは `mise run dev`（SPA を束ねてから `mix phx.server`）。
 - **言語の管理は uv・cargo・mise で分担する**（[ADR-0001](doc/adr/0001-toolchain.md)）。
 
   | 道具 | 受け持つもの | ロックファイル |
@@ -114,7 +115,7 @@ log/sessions/<日付>-<セッションID>.md        finish-session がコピー�
 
 `/finish-session` スキルの手順に従う。**どれかが落ちたらそこで止めて報告する。**
 
-1. コードを触ったら: `mise run test`（Rust / Gleam / Elixir）。触った層だけ `mise run test:rust` のように絞ってもよいが、コミットの前には全部回す
+1. コードを触ったら: `mise run test`（Rust / 相互運用 / Gleam / Elixir / E2E）。触った層だけ `mise run test:rust` のように絞ってもよいが、コミットの前には全部回す
 2. スライドと解説書がある。`check_docs.py`（外部参照・`<style>`・`style=` が 0 件）と、Playwright の `render_slides.py`（ブラウザでの表示）を通す
 3. `doc/` と `log/` の相対リンク切れが 0 件
 4. セッション記録をコピーし、`--check` で取りこぼしが 0 件

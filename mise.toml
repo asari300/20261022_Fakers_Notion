@@ -34,3 +34,78 @@ run = [
   "python3 -I .claude/skills/session-docs/check_docs.py",
   "uv run python .claude/skills/session-docs/render_slides.py",
 ]
+
+# ---- S002: 骨組みと縦スライスのタスク -------------------------------------------------
+# 配置: src/Rust（Cargo workspace）、src/Gleam/fakers_shared（両ターゲット）、src/Gleam/fakers_web（Lustre、JS）、src/Elixir/fakers（Phoenix）
+
+[tasks.setup]
+description = "依存の取得: cargo fetch、npm ci、gleam deps download、mix deps.get（ネットワークが要る）"
+run = [
+  "cargo fetch --manifest-path src/Rust/Cargo.toml",
+  "npm --prefix src/Gleam/fakers_web ci --no-audit --no-fund",
+  "cd src/Gleam/fakers_shared && gleam deps download",
+  "cd src/Gleam/fakers_web && gleam deps download",
+  "cd src/Elixir/fakers && mix deps.get",
+]
+
+[tasks."test:rust"]
+description = "Rust: fmt / clippy / test（fakers_core のテスト。fakers_nif は cdylib なのでビルドだけ）"
+dir = "src/Rust"
+run = [
+  "cargo fmt --all --check",
+  "cargo clippy --workspace --all-targets -- -D warnings",
+  "cargo test --workspace",
+]
+
+[tasks."test:interop"]
+description = "相互運用ゲート: yrs の状態を yjs に適用し、yjs の編集を yrs に戻す（ADR-0003 の Accepted の条件）"
+dir = "src/Gleam/fakers_web"
+run = "node test/interop.mjs"
+
+[tasks."test:shared"]
+description = "Gleam の共有する型のテストを Erlang と JavaScript の両ターゲットで"
+dir = "src/Gleam/fakers_shared"
+run = ["gleam test", "gleam test --target javascript"]
+
+[tasks."test:web"]
+description = "Lustre の SPA のテスト（JavaScript ターゲット。FFI の差分計算）"
+dir = "src/Gleam/fakers_web"
+run = "gleam test"
+
+[tasks."test:elixir"]
+description = "Phoenix: mix test（NIF のビルドと Gleam の共有パッケージのビルドを含む）"
+dir = "src/Elixir/fakers"
+run = "mix test"
+
+[tasks."test:e2e"]
+description = "2 タブの E2E 検査（Playwright の Chromium。PORT=4100 で Phoenix を起動し、作成・同期・Enter・種別・再起動後の復元を確かめる）"
+depends = ["build:web"]
+run = "uv run python src/Python/e2e/two_tabs.py"
+
+[tasks.test]
+description = "3 言語の検査と E2E を全部回す（finish-session の 1）"
+depends = ["test:rust", "test:interop", "test:shared", "test:web", "test:elixir", "test:e2e"]
+
+[tasks."build:web"]
+description = "Lustre の SPA をビルドして Phoenix の priv/static/assets/app.js に束ねる（gleam build → esbuild）"
+dir = "src/Gleam/fakers_web"
+run = [
+  "gleam build --target javascript",
+  "npx esbuild entry.mjs --bundle --format=esm --outfile=../../Elixir/fakers/priv/static/assets/app.js",
+  "cp app.css ../../Elixir/fakers/priv/static/assets/app.css",
+]
+
+[tasks."build:elixir"]
+description = "Phoenix をコンパイルする（Rustler の NIF と Gleam の共有パッケージも）"
+dir = "src/Elixir/fakers"
+run = "mix compile"
+
+[tasks.build]
+description = "全部ビルドする"
+depends = ["build:web", "build:elixir"]
+
+[tasks.dev]
+description = "SPA を束ねてから Phoenix を起動する（http://localhost:4000）"
+depends = ["build:web"]
+dir = "src/Elixir/fakers"
+run = "mix phx.server"
