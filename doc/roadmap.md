@@ -78,3 +78,19 @@ flowchart LR
 - ライセンスの決定（未定。GlobeMode は MIT OR Apache-2.0）。
 - `rustler` の Hex 版が 0.39 になったら crate と揃えて上げる。
 - lustre_dev_tools を使いたくなったら、まず 16K ページのカーネルで Bun が動くかを試す（[research/stack.md](research/stack.md)）。
+
+### S004（運用、2026-10-23）で済んだこと
+
+- worktree の実体を USB（`/mnt/usb_sd64c/Fakers_Notion/worktrees/`）に移し、`.git-worktree/` からは symlink にした。冷間ビルドとテストは SD 52 分、USB 24 分（[作業記録](../log/work/2026-10-23-s004-usb-worktrees.md)）。
+
+### S005（P2 の 1 回目、2026-10-23）で済んだこと
+
+- リモートの編集でキャレットが末尾へ飛ばないようにした（`session.ffi.mjs` の `applyRemote`。Y.RelativePosition で選択範囲を保つ）。入力欄は `<input>` のまま。contenteditable は複数行やインライン装飾が要るときに回す。
+- flush のときに最初の見出しの文字列を `title` 列へ写す。
+- E2E にキャレット保持・title 同期・切断中の編集の再接続後の復元を足した。**P2 の完了条件のうち「キャレットが飛ばない」「再接続後に切断中の差分が復元される」を満たした。**
+
+### P2 の残り
+
+- S006: Presence とリモートのカーソル表示。
+- S007: ブロックの種類の追加（リスト・ToDo・コード・引用・区切り・トグル）。
+- 日本語入力の変換中にリモート更新が来たときの扱い（今は入力欄の値を書き換えるので変換が切れうる）。

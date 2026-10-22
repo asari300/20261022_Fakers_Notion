@@ -78,7 +78,7 @@ dir = "src/Elixir/fakers"
 run = "mix test"
 
 [tasks."test:e2e"]
-description = "2 タブの E2E 検査（Playwright の Chromium。PORT=4100 で Phoenix を起動し、作成・同期・Enter・種別・再起動後の復元を確かめる）"
+description = "2 タブの E2E 検査（Playwright の Chromium。PORT=4100 で Phoenix を起動し、作成・同期・Enter・種別・キャレット保持・title 同期・再起動後の復元・再接続を確かめる）"
 depends = ["build:web"]
 run = "uv run python src/Python/e2e/two_tabs.py"
 
