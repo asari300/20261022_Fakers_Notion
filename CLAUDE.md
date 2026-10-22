@@ -13,14 +13,16 @@ Fakers Notion は Notion を模倣する共同編集アプリ。コアは Rust�
 ```bash
 MAIN=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')   # main のチェックアウト
 cd "$MAIN"
-git worktree add -b feature/<topic> .git-worktree/<topic> main
+U=/mnt/usb_sd64c/Fakers_Notion/worktrees   # 実体は USB（SD の容量と書き込み速度のため）
+git worktree add -b feature/<topic> $U/<topic> main
+ln -s $U/<topic> .git-worktree/<topic>
 cd .git-worktree/<topic>
 mise trust && mise install --locked   # worktree のパスごとに信頼が要る
 uv sync                               # worktree ごとに必須
 ```
 
 - ブランチ名は `feature/<topic>`。`<topic>` は `sNNN-<英小文字とハイフン>`（例 `s002-vertical-slice`）。
-- worktree は `.git-worktree/<topic>` に置く（`.gitignore` 済み）。
+- worktree の**実体は `/mnt/usb_sd64c/Fakers_Notion/worktrees/<topic>`**（USB, ext4）。`.git-worktree/<topic>` はそこへの symlink（`.gitignore` 済み）。計測（S004）では冷間ビルドが SD の 52 分に対し USB 24 分、書き込みは 3 → 53 MB/s。`git worktree move` はデバイスをまたげないので、移すときは作り直す。
 - **orca が作る worktree**（`~/orca/workspaces/<repo>/<名前>`、ブランチ `asari300/<名前>`）は**セッションの起動場所にすぎない**。そこでは何も編集もコミットもしない。作業はこの規約の worktree で行う。
 - **`.venv` を worktree 間で共有・symlink しない。** editable install はそのチェックアウトの `src/` を指すため。
 - コミットは feature ブランチに行う。
