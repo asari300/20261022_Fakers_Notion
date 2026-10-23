@@ -7,6 +7,7 @@ import fakers_web/api
 import fakers_web/route.{type Route, PageList, PageView}
 import fakers_web/session.{type Session}
 import gleam/dynamic/decode
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
@@ -32,10 +33,16 @@ pub type Model {
     pages: List(PageSummary),
     blocks: List(Block),
     status: String,
+    peers: List(Peer),
     draft_title: String,
     session: Option(Session),
     error: Option(String),
   )
+}
+
+/// 同じページを開いている他の人。
+pub type Peer {
+  Peer(name: String, color: String)
 }
 
 pub type Msg {
@@ -47,6 +54,7 @@ pub type Msg {
   SessionOpened(doc_id: String, session: Session)
   BlocksChanged(String)
   StatusChanged(String)
+  PeersChanged(String)
   TextEdited(block_id: String, text: String)
   EnterPressed(block_id: String)
   KindToggled(block_id: String, kind: block.BlockKind)
@@ -61,6 +69,7 @@ fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
       pages: [],
       blocks: [],
       status: "",
+      peers: [],
       draft_title: "",
       session: None,
       error: None,
@@ -89,6 +98,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             route: next,
             blocks: [],
             status: "",
+            peers: [],
             session: None,
             error: None,
           ),
@@ -154,6 +164,18 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
     StatusChanged(status) -> #(Model(..model, status:), effect.none())
 
+    PeersChanged(raw) -> {
+      let peer = {
+        use name <- decode.field("name", decode.string)
+        use color <- decode.field("color", decode.string)
+        decode.success(Peer(name:, color:))
+      }
+      case json.parse(raw, decode.list(peer)) {
+        Ok(peers) -> #(Model(..model, peers:), effect.none())
+        Error(_) -> #(model, effect.none())
+      }
+    }
+
     TextEdited(id, text) -> {
       // 入力欄の値と食い違わないよう、手元のブロックも先に書き換える
       let blocks =
@@ -217,9 +239,12 @@ fn enter_route(r: Route) -> Effect(Msg) {
     PageView(id) -> {
       use dispatch <- effect.from
       let s =
-        session.open(id, fn(json) { dispatch(BlocksChanged(json)) }, fn(status) {
-          dispatch(StatusChanged(status))
-        })
+        session.open(
+          id,
+          fn(json) { dispatch(BlocksChanged(json)) },
+          fn(status) { dispatch(StatusChanged(status)) },
+          fn(peers) { dispatch(PeersChanged(peers)) },
+        )
       dispatch(SessionOpened(id, s))
     }
   }
@@ -300,6 +325,15 @@ fn view_page(model: Model) -> Element(Msg) {
         [
           html.text("← ページ一覧"),
         ],
+      ),
+      html.span(
+        [attribute.class("peers")],
+        list.map(model.peers, fn(p) {
+          html.span(
+            [attribute.class("peer"), attribute.style("--peer", p.color)],
+            [html.text(p.name)],
+          )
+        }),
       ),
       html.span([attribute.class("status")], [html.text(model.status)]),
     ]),

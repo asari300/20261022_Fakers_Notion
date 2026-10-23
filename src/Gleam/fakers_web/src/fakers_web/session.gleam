@@ -7,11 +7,14 @@ pub type Session
 /// 接続して `doc:<id>` に参加する。`on_blocks` は sync の後と文書が変わるたびに
 /// ブロック一覧の JSON を受け取り、`on_status` は
 /// "connecting" | "joined" | "error: <理由>" | "closed" を受け取る。
+/// `on_peers` は自分以外の参加者の JSON `[{"id","name","color"}]` を受け取る
+/// （カーソルの描画は JS 側で行う）。
 @external(javascript, "./session.ffi.mjs", "open")
 pub fn open(
   doc_id: String,
   on_blocks: fn(String) -> Nil,
   on_status: fn(String) -> Nil,
+  on_peers: fn(String) -> Nil,
 ) -> Session
 
 /// ブロックの文字列を `new_text` にする（差分だけを Y.Text に反映する）。

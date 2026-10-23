@@ -7,8 +7,10 @@ Phoenix を PORT=4100（E2E_PORT で変更可）で起動し、Playwright の Ch
   3. タブ 1 の段落に入力 → タブ 2 に反映される（5 s 以内。実測の遅れを表示する）
   4. タブ 1 で Enter → 新しいブロックが両方に現れる。タブ 2 で入力、タブ 1 で種別を見出しに → 反映
   5. タブ 1 の段落でキャレットを途中に置き、タブ 2 が先頭に挿入 → タブ 1 のキャレットは挿入分だけ後ろへずれ、末尾へ飛ばない
+  5b. Presence: タブ 1 に参加者 1 人とタブ 2 のキャレット（色付きの縦線と名前）が出て、
+      タブ 2 がキャレットを動かすと追従し、フォーカスを外すと消える
   6. タブ 1 で見出しを書き換える → flush の後、ページ一覧の API の title も変わる
-  7. サーバを止めて起動し直し、両タブをリロード → 3 ブロックと内容が残っている
+  7. サーバを止めて起動し直し、両タブをリロード → 3 ブロックと内容が残り、参加者は互いに 1 人ずつ
   8. サーバを止めたままタブ 1 で入力し、サーバを起動 → 再接続後にタブ 2 へ届く（切断中の差分の復元）
 
   uv run python src/Python/e2e/two_tabs.py        # mise run test:e2e（build:web の後）
@@ -123,6 +125,21 @@ def main() -> int:
             caret = para1.evaluate("el => [document.activeElement === el, el.selectionStart, el.selectionEnd]")
             assert caret == [True, 7, 7], f"キャレットが保たれていない: {caret}"
 
+            # 5b. Presence とリモートのキャレット（タブ 2 のキャレットは "AB" の直後 = 2）
+            name2 = t2.evaluate("sessionStorage.getItem('fakers-name')")
+            expect(t1.locator(".peer")).to_have_count(1, timeout=5_000)
+            expect(t1.locator(".peer")).to_have_text(name2)
+            remote = t1.locator(".remote-caret")
+            expect(remote).to_have_count(1, timeout=5_000)
+            expect(remote).to_have_attribute("data-peer", name2)
+            expect(remote).to_have_attribute("data-index", "2")
+            para2.press("End")
+            expect(remote).to_have_attribute("data-index", "18", timeout=5_000)
+            box, cbox = para1.bounding_box(), remote.bounding_box()
+            assert box["x"] < cbox["x"] < box["x"] + box["width"] and abs(cbox["y"] - box["y"]) < 2, (box, cbox)
+            para2.evaluate("el => el.blur()")
+            expect(remote).to_have_count(0, timeout=5_000)
+
             # 6. 見出し → title 列
             head1 = inputs1.nth(0)
             head1.click()
@@ -151,6 +168,8 @@ def main() -> int:
                 expect(ins.nth(2)).to_have_value("from tab 2")
                 expect(t.locator(".block").nth(2)).to_have_class(re.compile(r"block-heading"))
                 expect(t.locator(".status")).to_contain_text("joined", timeout=10_000)
+            for t in (t1, t2):
+                expect(t.locator(".peer")).to_have_count(1, timeout=10_000)
 
             # 8. 切断中の編集が再接続後に届く
             stop_server(proc)
@@ -165,7 +184,7 @@ def main() -> int:
             reconnect_ms = (time.perf_counter() - started) * 1000
             browser.close()
         print(
-            f"OK e2e: {url} / tab1→tab2 {latency_ms:.0f} ms / キャレット保持 / title 同期 / "
+            f"OK e2e: {url} / tab1→tab2 {latency_ms:.0f} ms / キャレット保持 / Presence とリモートのキャレット / title 同期 / "
             f"再起動後も残った / 切断中の編集が再接続後 {reconnect_ms:.0f} ms で届いた"
         )
         return 0

@@ -1,7 +1,7 @@
 // 1 ページ分の編集セッション。Y.Doc・Socket・Channel をここで持ち、
 // バイト列は Gleam 側に一切渡さない（Gleam には JSON の文字列だけを渡す）。
 import * as Y from "yjs";
-import { Socket } from "phoenix";
+import { Presence, Socket } from "phoenix";
 
 // 自分で適用したサーバ由来の更新の origin。ローカル変更と区別するのに使う。
 const REMOTE = "remote";
@@ -85,17 +85,157 @@ function findBlockIn(doc, blockId) {
   return i < 0 ? null : blocks.get(i);
 }
 
+// 相対位置（Uint8Array）と base64 の行き来。Presence の meta に文字列で載せるため
+const b64 = (u8) => btoa(String.fromCharCode(...u8));
+const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+// タブごとの表示名。sessionStorage が使えなければその場限りの名前
+function myName() {
+  const fallback = "ゲスト " + Math.random().toString(16).slice(2, 6);
+  try {
+    let n = sessionStorage.getItem("fakers-name");
+    if (!n) sessionStorage.setItem("fakers-name", (n = fallback));
+    return n;
+  } catch {
+    return fallback;
+  }
+}
+
+// user_id から決まる色。全員の画面で同じ人は同じ色になる
+function colorOf(id) {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return `hsl(${h % 360} 70% 45%)`;
+}
+
+// 自分の選択範囲を Y.Text 上の相対位置で表す（相手の手元の編集でずれない）。
+// フォーカスがブロックに無ければ {}（カーソルを消す）
+function cursorPayload(doc) {
+  const el = document.activeElement;
+  const blockId = el?.id?.startsWith("block-") ? el.id.slice(6) : null;
+  const block = blockId ? findBlockIn(doc, blockId) : null;
+  if (!block || el.selectionStart == null) return {};
+  const text = block.get("text");
+  const enc = (i) => b64(Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(text, i)));
+  const back = el.selectionDirection === "backward";
+  return {
+    block: blockId,
+    anchor: enc(back ? el.selectionEnd : el.selectionStart),
+    head: enc(back ? el.selectionStart : el.selectionEnd),
+  };
+}
+
+// 他人の meta の相対位置を手元の文書の位置へ。壊れていれば null
+function toIndex(doc, s) {
+  try {
+    return Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(unb64(s)), doc)?.index ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// 入力欄の文字位置 i の x 座標（ビューポート基準）。canvas で文字幅を測る
+let measureCtx = null;
+function caretX(el, i) {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  const cs = getComputedStyle(el);
+  measureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const r = el.getBoundingClientRect();
+  const left = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) - el.scrollLeft;
+  return left + measureCtx.measureText(el.value.slice(0, i)).width;
+}
+
+// 他人のカーソルと選択範囲を、画面に固定した透明な層へ描き直す
+function paintCursors(session) {
+  const layer = session.layer;
+  layer.replaceChildren();
+  for (const p of session.peers) {
+    const c = p.cursor;
+    const el = c && document.getElementById("block-" + c.block);
+    if (!el) continue;
+    const a = toIndex(session.doc, c.anchor);
+    const h = toIndex(session.doc, c.head);
+    if (a == null || h == null) continue;
+    const len = el.value.length;
+    const r = el.getBoundingClientRect();
+    const xa = caretX(el, Math.min(a, len));
+    const xh = caretX(el, Math.min(h, len));
+    const box = (cls, x, w) => {
+      const d = document.createElement("div");
+      d.className = cls;
+      d.style.cssText = `left:${x}px;top:${r.top}px;width:${w}px;height:${r.height}px;--peer:${p.color}`;
+      layer.append(d);
+      return d;
+    };
+    if (a !== h) box("remote-sel", Math.min(xa, xh), Math.abs(xh - xa));
+    // 入力欄の外へスクロールしたキャレットは描かない
+    if (xh < r.left || xh > r.right) continue;
+    const caret = box("remote-caret", xh, 2);
+    caret.dataset.peer = p.name;
+    caret.dataset.index = String(h);
+    const label = document.createElement("span");
+    label.className = "remote-label";
+    label.textContent = p.name;
+    caret.append(label);
+  }
+}
+
 function findBlock(session, blockId) {
   const blocks = session.doc.getArray("blocks");
   const i = findIndex(blocks, blockId);
   return i < 0 ? null : blocks.get(i);
 }
 
-export function open(docId, onBlocks, onStatus) {
+export function open(docId, onBlocks, onStatus, onPeers) {
   const doc = new Y.Doc();
   const socket = new Socket("/socket", {});
-  const channel = socket.channel("doc:" + docId, {});
-  const session = { doc, socket, channel, closed: false, scheduled: false };
+  const channel = socket.channel("doc:" + docId, { name: myName() });
+  const presence = new Presence(channel);
+  const layer = document.createElement("div");
+  layer.className = "remote-layer";
+  document.body.append(layer);
+  const session = {
+    doc, socket, channel, layer, closed: false, scheduled: false,
+    me: null, peers: [], lastCursor: null, cursorPending: false, paintPending: false,
+  };
+
+  // カーソルの送信と描画は 1 フレームに 1 回にまとめる
+  const paint = () => {
+    if (session.paintPending) return;
+    session.paintPending = true;
+    requestAnimationFrame(() => {
+      session.paintPending = false;
+      if (!session.closed) paintCursors(session);
+    });
+  };
+  const sendCursor = () => {
+    if (session.cursorPending) return;
+    session.cursorPending = true;
+    requestAnimationFrame(() => {
+      session.cursorPending = false;
+      if (session.closed || channel.state !== "joined") return;
+      const payload = cursorPayload(doc);
+      const key = JSON.stringify(payload);
+      // 相対位置は手前に打った文字では変わらないので、入力のたびには送らない
+      if (key === session.lastCursor) return;
+      session.lastCursor = key;
+      channel.push("cursor", payload);
+    });
+  };
+  session.listeners = [
+    ...["selectionchange", "focusin", "focusout", "keyup", "mouseup"].map((t) => [document, t, sendCursor]),
+    [window, "resize", paint],
+    [document, "scroll", paint, true],
+  ];
+  for (const [target, type, fn, capture] of session.listeners) target.addEventListener(type, fn, capture);
+
+  presence.onSync(() => {
+    session.peers = presence
+      .list((id, { metas: [m] }) => ({ id, name: m.name, color: colorOf(id), cursor: m.cursor }))
+      .filter((p) => p.id !== session.me);
+    if (!session.closed) onPeers(JSON.stringify(session.peers.map(({ id, name, color }) => ({ id, name, color }))));
+    paint();
+  });
 
   const status = (s) => {
     if (!session.closed) onStatus(s);
@@ -118,6 +258,7 @@ export function open(docId, onBlocks, onStatus) {
 
   doc.on("update", (update, origin) => {
     notify();
+    paint();
     if (origin === REMOTE) return;
     // 未接続中の変更は送らない。次の sync の後の追いつき処理でまとめて送る
     if (channel.state === "joined") pushUpdate(update);
@@ -144,7 +285,13 @@ export function open(docId, onBlocks, onStatus) {
   socket.connect();
   channel
     .join()
-    .receive("ok", () => status("joined"))
+    .receive("ok", (r) => {
+      // 再接続のたびに user_id が変わるので、カーソルも送り直す
+      session.me = r.user_id;
+      session.lastCursor = null;
+      status("joined");
+      sendCursor();
+    })
     .receive("error", (r) => status("error: " + (r?.reason ?? JSON.stringify(r))))
     .receive("timeout", () => status("error: timeout"));
 
@@ -197,6 +344,8 @@ export function delete_block(session, blockId) {
 export function close(session) {
   if (session.closed) return undefined;
   session.closed = true;
+  for (const [target, type, fn, capture] of session.listeners) target.removeEventListener(type, fn, capture);
+  session.layer.remove();
   session.channel.leave();
   session.socket.disconnect();
   session.doc.destroy();
