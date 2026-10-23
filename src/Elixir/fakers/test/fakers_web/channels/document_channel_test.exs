@@ -66,6 +66,46 @@ defmodule FakersWeb.DocumentChannelTest do
     DocumentServer.stop(doc.id)
   end
 
+  test "参加者とカーソルが Presence に載り、退室で消える", %{doc: doc, socket_a: socket_a} do
+    assert_push "presence_state", state_a
+    assert [%{metas: [%{name: "ゲスト", cursor: nil}]}] = Map.values(state_a)
+
+    {:ok, %{user_id: b_id}, socket_b} =
+      FakersWeb.UserSocket
+      |> socket("user", %{})
+      |> subscribe_and_join(FakersWeb.DocumentChannel, "doc:" <> doc.id, %{"name" => "  Bob  "})
+
+    assert_broadcast "presence_diff", %{joins: %{^b_id => %{metas: [%{name: "Bob"}]}}}
+
+    ref = push(socket_b, "cursor", %{"block" => "x", "anchor" => "AQ==", "head" => "Ag=="})
+    assert_reply ref, :ok
+    assert_broadcast "presence_diff", %{joins: %{^b_id => %{metas: [%{cursor: %{} = cursor}]}}}
+    assert cursor == %{block: "x", anchor: "AQ==", head: "Ag=="}
+
+    ref =
+      push(socket_b, "cursor", %{
+        "block" => String.duplicate("x", 65),
+        "anchor" => "",
+        "head" => ""
+      })
+
+    assert_reply ref, :error, %{reason: "bad cursor"}
+
+    ref = push(socket_b, "cursor", %{})
+    assert_reply ref, :ok
+
+    assert_broadcast "presence_diff", %{
+      joins: %{^b_id => %{metas: [%{cursor: nil}]}},
+      leaves: %{^b_id => %{metas: [%{cursor: %{}}]}}
+    }
+
+    Process.unlink(socket_b.channel_pid)
+    close(socket_b)
+    assert_broadcast "presence_diff", %{leaves: %{^b_id => _}}
+    _ = socket_a
+    DocumentServer.stop(doc.id)
+  end
+
   test "無いページには join できない" do
     assert {:error, %{reason: "not_found"}} = join_doc(Ecto.UUID.generate())
     assert {:error, %{reason: "not_found"}} = join_doc("nope")

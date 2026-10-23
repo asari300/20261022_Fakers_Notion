@@ -14,6 +14,7 @@ defmodule Fakers.Application do
        repos: Application.fetch_env!(:fakers, :ecto_repos), skip: skip_migrations?()},
       {DNSCluster, query: Application.get_env(:fakers, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Fakers.PubSub},
+      FakersWeb.Presence,
       # 文書ごとのプロセス（Fakers.Documents.DocumentServer）の名前解決と監視
       {Registry, keys: :unique, name: Fakers.Documents.Registry},
       {DynamicSupervisor, name: Fakers.Documents.Supervisor, strategy: :one_for_one},

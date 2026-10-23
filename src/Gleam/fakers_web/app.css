@@ -91,6 +91,34 @@ body {
 .back:hover { color: var(--fg); }
 .status { color: var(--muted); font-size: 0.8rem; }
 
+/* 同じページを開いている他の人（色は user_id から決まる --peer） */
+.peers { display: flex; gap: 6px; margin: 0 8px 0 auto; }
+.peer {
+  font-size: 0.75rem;
+  color: #fff;
+  background: var(--peer);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+
+/* 他の人のキャレットと選択範囲。画面に固定した層に JS が描く */
+.remote-layer { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+.remote-caret, .remote-sel { position: fixed; }
+.remote-caret { background: var(--peer); }
+.remote-sel { background: var(--peer); opacity: 0.2; }
+.remote-label {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  font-size: 0.65rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--peer);
+  border-radius: 3px 3px 3px 0;
+  padding: 0 4px;
+}
+
 .block {
   display: flex;
   align-items: center;
