@@ -77,6 +77,19 @@ defmodule FakersWeb.DocumentChannelTest do
 
     assert_broadcast "presence_diff", %{joins: %{^b_id => %{metas: [%{name: "Bob"}]}}}
 
+    # 結合文字を連ねた名前は 1 書記素なので String.slice では切れない。バイト数で弾く
+    {:ok, %{user_id: c_id}, socket_c} =
+      FakersWeb.UserSocket
+      |> socket("user", %{})
+      |> subscribe_and_join(FakersWeb.DocumentChannel, "doc:" <> doc.id, %{
+        "name" => "a" <> String.duplicate("\u0301", 300)
+      })
+
+    assert_broadcast "presence_diff", %{joins: %{^c_id => %{metas: [%{name: "ゲスト"}]}}}
+    Process.unlink(socket_c.channel_pid)
+    close(socket_c)
+    assert_broadcast "presence_diff", %{leaves: %{^c_id => _}}
+
     ref = push(socket_b, "cursor", %{"block" => "x", "anchor" => "AQ==", "head" => "Ag=="})
     assert_reply ref, :ok
     assert_broadcast "presence_diff", %{joins: %{^b_id => %{metas: [%{cursor: %{} = cursor}]}}}

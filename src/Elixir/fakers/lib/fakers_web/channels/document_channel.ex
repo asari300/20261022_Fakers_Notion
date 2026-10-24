@@ -13,6 +13,8 @@ defmodule FakersWeb.DocumentChannel do
   alias FakersWeb.Presence
 
   @max_name 32
+  # 書記素で切る前のバイト数の上限（結合文字を連ねた 1 書記素の巨大な名前を弾く）
+  @max_name_bytes 256
   @max_id 64
   @max_pos 256
 
@@ -85,7 +87,7 @@ defmodule FakersWeb.DocumentChannel do
   defp clean_cursor(payload) when payload == %{}, do: {:ok, nil}
   defp clean_cursor(_), do: :error
 
-  defp clean_name(name) when is_binary(name) do
+  defp clean_name(name) when is_binary(name) and byte_size(name) <= @max_name_bytes do
     case name |> String.trim() |> String.slice(0, @max_name) do
       "" -> "ゲスト"
       n -> n
