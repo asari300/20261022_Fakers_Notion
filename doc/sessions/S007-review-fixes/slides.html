@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S007 S006 レビューの指摘を直す — Fakers Notion</title>
+<link rel="stylesheet" href="../../assets/slides.css">
+</head>
+<body data-deck="Fakers Notion S007 S006 レビューの指摘を直す">
+
+<section class="slide" id="S01">
+  <span class="tag">S007 · 2026-10-24 · P2</span>
+  <h1>S006 レビューの指摘を直す</h1>
+  <p class="lead">他の人のキャレットが 1 文字遅れて描かれる不具合、名前のバイト上限、選択範囲の帯のはみ出し</p>
+  <div class="big">リモートのキャレットは<b>入力欄ではなく文書</b>を測る</div>
+</section>
+
+<section class="slide" id="S02">
+  <span class="tag">目的</span>
+  <h1>このセッションでやること</h1>
+  <ul>
+    <li>S006 のコミットを <code>/ponytail-review</code> でレビューし、指摘 1〜3 を全部直す（ユーザーの選択）</li>
+    <li>P2「共同編集の品質」の仕上げ。Presence とキャレット表示の正しさと、信頼境界の検め</li>
+    <li>指摘 1 はレビュー時点では「ブラウザで再現していない」とした。直す前に E2E で再現させる</li>
+  </ul>
+</section>
+
+<section class="slide" id="S03">
+  <span class="tag">決定と理由</span>
+  <h1>決めたこと</h1>
+  <table class="compact">
+    <tr><th>指摘</th><th>決定</th><th>理由</th></tr>
+    <tr><td>1 キャレットが 1 文字遅れる</td><td><code>paintCursors</code> は入力欄の <code>el.value</code> ではなく Y.Text の文字列を測る</td><td>paint の rAF は Lustre の再描画より先に走るので、入力欄はまだ古い値。文書は常に最新</td></tr>
+    <tr><td>2 名前にバイト上限がない</td><td><code>clean_name</code> のガードに <code>byte_size &lt;= 256</code>。超えたら「ゲスト」</td><td><code>String.slice</code> は書記素で数えるので、結合文字を連ねた巨大な 1 書記素が通る。cursor と同じ検め方</td></tr>
+    <tr><td>3 選択範囲の帯のはみ出し</td><td>帯の左右を入力欄の <code>left</code>〜<code>right</code> に収める</td><td>キャレットは外なら描かないのに帯だけ検めていなかった</td></tr>
+  </table>
+</section>
+
+<section class="slide" id="S04">
+  <span class="tag">図</span>
+  <h1>なぜ 1 文字遅れたか（同じフレームの中の順番）</h1>
+  <svg class="fig" viewBox="0 0 800 260" role="img" aria-label="リモート更新を受けてから描画までの順番">
+    <rect class="svg-box-accent" x="20" y="90" width="170" height="80" rx="10"/>
+    <text class="svg-text-b" x="105" y="126" text-anchor="middle">update 受信</text>
+    <text class="svg-text" x="105" y="150" text-anchor="middle">Y.applyUpdate</text>
+    <line class="svg-line" x1="190" y1="130" x2="300" y2="130"/>
+    <rect class="svg-box" x="300" y="90" width="200" height="80" rx="10"/>
+    <text class="svg-text-b" x="400" y="126" text-anchor="middle">rAF ① paint</text>
+    <text class="svg-text" x="400" y="150" text-anchor="middle">el.value は古い</text>
+    <line class="svg-line" x1="500" y1="130" x2="600" y2="130"/>
+    <rect class="svg-box" x="600" y="90" width="180" height="80" rx="10"/>
+    <text class="svg-text-b" x="690" y="126" text-anchor="middle">rAF ② Lustre</text>
+    <text class="svg-text" x="690" y="150" text-anchor="middle">el.value を更新</text>
+    <text class="svg-text" x="400" y="40" text-anchor="middle">microtask: onBlocks → dispatch → Lustre が rAF ② を予約（① より後）</text>
+    <text class="svg-text" x="400" y="230" text-anchor="middle">修正: ① が測るのは el.value ではなく doc の Y.Text。順番に左右されない</text>
+  </svg>
+</section>
+
+<section class="slide" id="S05">
+  <span class="tag">再現手順</span>
+  <h1>再現と検証</h1>
+  <pre><code>mise run build:web &amp;&amp; mise run test:e2e   # 5b に「末尾に 1 文字入力 → 相手のキャレットの x が動く」を足した
+# 旧 FFI: リモートのキャレットが入力に追従していない: 430.84 → 430.84（失敗）
+# 修正後: OK e2e
+mise run test                                  # Rust / interop / Gleam / Elixir / E2E すべて通過</code></pre>
+  <div class="kpis">
+    <div class="kpi"><span class="n">3</span><span class="l">直した指摘</span></div>
+    <div class="kpi"><span class="n">21</span><span class="l">Elixir tests, 0 failures</span></div>
+    <div class="kpi"><span class="n">+39 / -8</span><span class="l">src の差分行</span></div>
+  </div>
+</section>
+
+<section class="slide" id="S06">
+  <span class="tag">次回</span>
+  <h1>次のセッション</h1>
+  <ul>
+    <li>S008: ブロックの種類の追加（リスト・ToDo・コード・引用・区切り・トグル）。P2 の最後の項目</li>
+    <li>E2E の 5b は同じブロックにフォーカスしていると <code>applyRemote</code> が値を先に揃えて不具合が隠れた。フォーカスの有無を変えた場面を足すときの注意</li>
+    <li>日本語入力の変換中にリモート更新が来たときの扱いは残ったまま</li>
+  </ul>
+</section>
+
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

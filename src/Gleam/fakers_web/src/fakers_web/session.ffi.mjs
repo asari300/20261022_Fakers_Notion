@@ -134,15 +134,15 @@ function toIndex(doc, s) {
   }
 }
 
-// 入力欄の文字位置 i の x 座標（ビューポート基準）。canvas で文字幅を測る
+// 入力欄で文字列 value の位置 i にある文字の x 座標（ビューポート基準）。canvas で文字幅を測る
 let measureCtx = null;
-function caretX(el, i) {
+function caretX(el, value, i) {
   measureCtx ??= document.createElement("canvas").getContext("2d");
   const cs = getComputedStyle(el);
   measureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
   const r = el.getBoundingClientRect();
   const left = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) - el.scrollLeft;
-  return left + measureCtx.measureText(el.value.slice(0, i)).width;
+  return left + measureCtx.measureText(value.slice(0, i)).width;
 }
 
 // 他人のカーソルと選択範囲を、画面に固定した透明な層へ描き直す
@@ -156,10 +156,11 @@ function paintCursors(session) {
     const a = toIndex(session.doc, c.anchor);
     const h = toIndex(session.doc, c.head);
     if (a == null || h == null) continue;
-    const len = el.value.length;
+    // 入力欄の値は Lustre がこの後で書き換えることがあるので、文書の方を測る
+    const value = findBlockIn(session.doc, c.block)?.get("text")?.toString() ?? el.value;
     const r = el.getBoundingClientRect();
-    const xa = caretX(el, Math.min(a, len));
-    const xh = caretX(el, Math.min(h, len));
+    const xa = caretX(el, value, Math.min(a, value.length));
+    const xh = caretX(el, value, Math.min(h, value.length));
     const box = (cls, x, w) => {
       const d = document.createElement("div");
       d.className = cls;
@@ -167,7 +168,10 @@ function paintCursors(session) {
       layer.append(d);
       return d;
     };
-    if (a !== h) box("remote-sel", Math.min(xa, xh), Math.abs(xh - xa));
+    // 選択範囲の帯は入力欄の中に収める（横にスクロールした分は切る）
+    const sl = Math.max(Math.min(xa, xh), r.left);
+    const sr = Math.min(Math.max(xa, xh), r.right);
+    if (a !== h && sl < sr) box("remote-sel", sl, sr - sl);
     // 入力欄の外へスクロールしたキャレットは描かない
     if (xh < r.left || xh > r.right) continue;
     const caret = box("remote-caret", xh, 2);

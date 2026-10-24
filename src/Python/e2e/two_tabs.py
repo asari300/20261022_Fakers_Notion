@@ -68,6 +68,16 @@ def stop_server(proc: subprocess.Popen) -> None:
         proc.wait()
 
 
+def remote_caret_x(tab) -> float:
+    """他の人のキャレットの x 座標。描き直しで要素が入れ替わるので、1 回の evaluate で取る"""
+    for _ in range(50):
+        x = tab.evaluate("document.querySelector('.remote-caret')?.getBoundingClientRect().x")
+        if x is not None:
+            return x
+        time.sleep(0.1)
+    raise AssertionError("リモートのキャレットが無い")
+
+
 def main() -> int:
     mix("ecto.create", "--quiet")
     mix("ecto.migrate", "--quiet")
@@ -134,6 +144,18 @@ def main() -> int:
             expect(remote).to_have_attribute("data-peer", name2)
             expect(remote).to_have_attribute("data-index", "2")
             para2.press("End")
+            expect(remote).to_have_attribute("data-index", "18", timeout=5_000)
+            # 末尾に 1 文字入力しても cursor は送られない（相対位置が同じ）。描画は文書から測るので
+            # 1 文字分右へ動く（入力欄の古い値で測ると 1 文字遅れて同じ x に留まる）。
+            # タブ 1 が同じブロックにフォーカスしていると applyRemote が値を先に揃えてしまうので外す
+            para1.evaluate("el => el.blur()")
+            x18 = remote_caret_x(t1)
+            para2.type("x")
+            expect(remote).to_have_attribute("data-index", "19", timeout=5_000)
+            expect(inputs1.nth(1)).to_have_value(re.compile(r"x$"))
+            x19 = remote_caret_x(t1)
+            assert x19 > x18, f"リモートのキャレットが入力に追従していない: {x18} → {x19}"
+            para2.press("Backspace")
             expect(remote).to_have_attribute("data-index", "18", timeout=5_000)
             box, cbox = para1.bounding_box(), remote.bounding_box()
             assert box["x"] < cbox["x"] < box["x"] + box["width"] and abs(cbox["y"] - box["y"]) < 2, (box, cbox)
