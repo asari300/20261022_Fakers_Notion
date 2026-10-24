@@ -43,6 +43,9 @@ function snapshot(doc) {
       id: m.get("id"),
       type: m.get("type"),
       text: m.get("text")?.toString() ?? "",
+      // 他人が壊れた値を書いても一覧ごと読めなくならないよう、ここで形を揃える
+      checked: m.get("checked") === true,
+      indent: Number.isSafeInteger(m.get("indent")) ? Math.max(0, m.get("indent")) : 0,
     })),
   );
 }
@@ -134,15 +137,21 @@ function toIndex(doc, s) {
   }
 }
 
-// 入力欄で文字列 value の位置 i にある文字の x 座標（ビューポート基準）。canvas で文字幅を測る
+// 入力欄で文字列 value の位置 i にある文字の座標 {x, y, h}（ビューポート基準）。canvas で文字幅を測る。
+// textarea（コード）は折り返さない前提で、改行の数から行を決める
 let measureCtx = null;
-function caretX(el, value, i) {
+function caretAt(el, value, i) {
   measureCtx ??= document.createElement("canvas").getContext("2d");
   const cs = getComputedStyle(el);
   measureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
   const r = el.getBoundingClientRect();
   const left = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) - el.scrollLeft;
-  return left + measureCtx.measureText(value.slice(0, i)).width;
+  const lines = value.slice(0, i).split("\n");
+  const x = left + measureCtx.measureText(lines.at(-1)).width;
+  if (el.tagName !== "TEXTAREA") return { x, y: r.top, h: r.height };
+  const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
+  const top = r.top + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop) - el.scrollTop;
+  return { x, y: top + (lines.length - 1) * lh, h: lh };
 }
 
 // 他人のカーソルと選択範囲を、画面に固定した透明な層へ描き直す
@@ -159,22 +168,22 @@ function paintCursors(session) {
     // 入力欄の値は Lustre がこの後で書き換えることがあるので、文書の方を測る
     const value = findBlockIn(session.doc, c.block)?.get("text")?.toString() ?? el.value;
     const r = el.getBoundingClientRect();
-    const xa = caretX(el, value, Math.min(a, value.length));
-    const xh = caretX(el, value, Math.min(h, value.length));
-    const box = (cls, x, w) => {
+    const pa = caretAt(el, value, Math.min(a, value.length));
+    const ph = caretAt(el, value, Math.min(h, value.length));
+    const box = (cls, x, y, w, ht) => {
       const d = document.createElement("div");
       d.className = cls;
-      d.style.cssText = `left:${x}px;top:${r.top}px;width:${w}px;height:${r.height}px;--peer:${p.color}`;
+      d.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${ht}px;--peer:${p.color}`;
       layer.append(d);
       return d;
     };
-    // 選択範囲の帯は入力欄の中に収める（横にスクロールした分は切る）
-    const sl = Math.max(Math.min(xa, xh), r.left);
-    const sr = Math.min(Math.max(xa, xh), r.right);
-    if (a !== h && sl < sr) box("remote-sel", sl, sr - sl);
+    // 選択範囲の帯は入力欄の中に収める（横にスクロールした分は切る）。複数行にまたがる選択は帯を描かない
+    const sl = Math.max(Math.min(pa.x, ph.x), r.left);
+    const sr = Math.min(Math.max(pa.x, ph.x), r.right);
+    if (a !== h && pa.y === ph.y && sl < sr) box("remote-sel", sl, ph.y, sr - sl, ph.h);
     // 入力欄の外へスクロールしたキャレットは描かない
-    if (xh < r.left || xh > r.right) continue;
-    const caret = box("remote-caret", xh, 2);
+    if (ph.x < r.left || ph.x > r.right || ph.y < r.top || ph.y + ph.h > r.bottom + 1) continue;
+    const caret = box("remote-caret", ph.x, ph.y, 2, ph.h);
     caret.dataset.peer = p.name;
     caret.dataset.index = String(h);
     const label = document.createElement("span");
@@ -315,7 +324,7 @@ export function set_text(session, blockId, newText) {
   return undefined;
 }
 
-export function insert_block_after(session, blockId, kind) {
+export function insert_block_after(session, blockId, kind, indent) {
   const id = crypto.randomUUID();
   const blocks = session.doc.getArray("blocks");
   session.doc.transact(() => {
@@ -323,6 +332,7 @@ export function insert_block_after(session, blockId, kind) {
     m.set("id", id);
     m.set("type", kind);
     m.set("text", new Y.Text());
+    if (indent > 0) m.set("indent", indent);
     const i = findIndex(blocks, blockId);
     // 見つからなければ末尾に足す
     blocks.insert(i < 0 ? blocks.length : i + 1, [m]);
@@ -333,6 +343,16 @@ export function insert_block_after(session, blockId, kind) {
 export function set_kind(session, blockId, kind) {
   const block = findBlock(session, blockId);
   if (block && block.get("type") !== kind) block.set("type", kind);
+  return undefined;
+}
+
+export function set_checked(session, blockId, checked) {
+  findBlock(session, blockId)?.set("checked", checked);
+  return undefined;
+}
+
+export function set_indent(session, blockId, indent) {
+  findBlock(session, blockId)?.set("indent", indent);
   return undefined;
 }
 

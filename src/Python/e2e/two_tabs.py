@@ -122,7 +122,7 @@ def main() -> int:
             expect(inputs2).to_have_count(3, timeout=5_000)
             inputs2.nth(2).fill("from tab 2")
             expect(inputs1.nth(2)).to_have_value("from tab 2", timeout=5_000)
-            t1.locator(".block-toggle").nth(2).click()
+            t1.locator(".block-kind").nth(2).select_option("heading")
             expect(t2.locator(".block").nth(2)).to_have_class(re.compile(r"block-heading"), timeout=5_000)
 
             # 5. リモートの挿入でキャレットが飛ばない
@@ -204,10 +204,54 @@ def main() -> int:
             started = time.perf_counter()
             expect(t2.locator(".block-input").nth(1)).to_have_value("ABhello from tab 1 offline", timeout=30_000)
             reconnect_ms = (time.perf_counter() - started) * 1000
+
+            # 9. ブロックの種類: トグルと入れ子、ToDo、畳みは自分の画面だけ、コードの改行と相手のキャレット
+            blocks1, blocks2 = t1.locator(".block"), t2.locator(".block")
+            inputs1.nth(2).click()
+            inputs1.nth(2).press("End")
+            inputs1.nth(2).press("Enter")
+            expect(inputs2).to_have_count(4, timeout=10_000)
+            t1.locator(".block-kind").nth(3).select_option("toggle")
+            expect(blocks2.nth(3)).to_have_class(re.compile(r"block-toggle"), timeout=5_000)
+            inputs1.nth(3).click()
+            inputs1.nth(3).press_sequentially("Toggle")
+            inputs1.nth(3).press("Enter")  # トグルの Enter は 1 段深い段落
+            expect(inputs1).to_have_count(5, timeout=5_000)
+            expect(inputs1.nth(4)).to_be_focused()
+            t1.keyboard.type("child")
+            expect(inputs2.nth(4)).to_have_value("child", timeout=5_000)
+            expect(blocks2.nth(4)).to_have_attribute("style", re.compile(r"--indent:\s*1"))
+            inputs1.nth(4).press("Enter")
+            expect(inputs1).to_have_count(6, timeout=5_000)
+            t1.locator(".block-kind").nth(5).select_option("todo")
+            inputs1.nth(5).click()
+            inputs1.nth(5).press_sequentially("task")
+            inputs1.nth(5).press("Tab")
+            expect(blocks2.nth(5)).to_have_attribute("style", re.compile(r"--indent:\s*2"), timeout=5_000)
+            t1.locator(".block-check").check()
+            expect(t2.locator(".block-check")).to_be_checked(timeout=5_000)
+            t1.locator(".block-fold").click()
+            expect(blocks1).to_have_count(4, timeout=5_000)
+            expect(blocks2).to_have_count(6)
+            t1.locator(".block-fold").click()
+            expect(blocks1).to_have_count(6, timeout=5_000)
+            t2.locator(".block-kind").nth(4).select_option("code")
+            code2 = t2.locator("textarea.block-input")
+            code2.click()
+            code2.press("End")
+            code2.press("Enter")  # コードの Enter は改行（ブロックは増えない）
+            code2.press_sequentially("y")
+            expect(inputs1.nth(4)).to_have_value("child\ny", timeout=5_000)
+            expect(inputs1).to_have_count(6)
+            # 相手のキャレットは 2 行目（入力欄の上端より 1 行下）に描く
+            expect(remote).to_have_attribute("data-index", "7", timeout=5_000)
+            box, cbox = inputs1.nth(4).bounding_box(), remote.bounding_box()
+            assert cbox["y"] - box["y"] > cbox["height"], (box, cbox)
             browser.close()
         print(
             f"OK e2e: {url} / tab1→tab2 {latency_ms:.0f} ms / キャレット保持 / Presence とリモートのキャレット / title 同期 / "
-            f"再起動後も残った / 切断中の編集が再接続後 {reconnect_ms:.0f} ms で届いた"
+            f"再起動後も残った / 切断中の編集が再接続後 {reconnect_ms:.0f} ms で届いた / "
+            f"トグル・入れ子・ToDo・コードの改行"
         )
         return 0
     finally:

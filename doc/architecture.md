@@ -63,24 +63,27 @@ doc/  log/                      文書と記録
 
 ## 4. ブロックモデルと JSON の契約
 
-- CRDT: 根の `Y.Array("blocks")` に `Y.Map{ "id": string, "type": "paragraph" | "heading", "text": Y.Text }` を並べる。
+- CRDT: 根の `Y.Array("blocks")` に `Y.Map{ "id": string, "type": string, "text": Y.Text, "checked"?: bool, "indent"?: int }` を並べる（S008）。
+  - `type` は `paragraph` `heading` `bulleted` `todo` `code` `quote` `divider` `toggle` のどれか。
+  - `checked` は ToDo のチェック、`indent` は入れ子の深さ（0 から）。どちらも無ければ false と 0（S007 までの文書はキーを持たない）。
+  - 入れ子は木にせず、平らな配列の `indent` で表す。トグルを畳むと、すぐ後ろにある自分より深いブロックを隠す。畳んだ状態は各自の画面だけに持ち、文書には書かない（Notion と同じ）。
 - 位置は **UTF-16** で数える（yjs の規則）。yrs 側は `Options { offset_kind: OffsetKind::Utf16 }` で `Doc` を作る。
 - JSON の形は Rust の `blocks_json` と JS の FFI の両方が同じものを出す（キーの順は問わない。Rust は `id, text, type` の辞書順で出す）:
 
   ```json
-  [{"id":"…","type":"heading","text":"My page"},{"id":"…","type":"paragraph","text":""}]
+  [{"id":"…","type":"heading","text":"My page","checked":false,"indent":0},{"id":"…","type":"todo","text":"","checked":true,"indent":1}]
   ```
 
 - Gleam の型（`fakers_shared/src/fakers_shared/block.gleam`）:
 
   ```gleam
-  pub type BlockKind { Paragraph Heading }
-  pub type Block { Block(id: String, kind: BlockKind, text: String) }
+  pub type BlockKind { Paragraph Heading Bulleted Todo Code Quote Divider Toggle }
+  pub type Block { Block(id: String, kind: BlockKind, text: String, checked: Bool, indent: Int) }
   pub fn decode_blocks(json: String) -> Result(List(Block), json.DecodeError)
   pub fn block_to_json(Block) -> json.Json
   ```
 
-  Erlang 側では `{block, Id, heading, Text}`。Elixir からは `:fakers_shared@block.decode_blocks(json)`。
+  Erlang 側では `{block, Id, heading, Text, Checked, Indent}`。Elixir からは `:fakers_shared@block.decode_blocks(json)`。
 
 ## 5. Rust のコアと NIF の面
 

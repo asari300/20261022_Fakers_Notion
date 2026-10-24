@@ -1,6 +1,9 @@
-import fakers_shared/block.{Block, Heading, Paragraph}
+import fakers_shared/block.{Block, Heading, Paragraph, Toggle}
+import fakers_web
 import fakers_web/route
 import fakers_web/session
+import gleam/list
+import gleam/set
 import gleeunit
 
 pub fn main() -> Nil {
@@ -56,7 +59,28 @@ pub fn decode_blocks_test() {
     "[{\"id\":\"h1\",\"type\":\"heading\",\"text\":\"Title\"},"
     <> "{\"text\":\"hello 😀\",\"type\":\"paragraph\",\"id\":\"p1\"}]"
   assert block.decode_blocks(json)
-    == Ok([Block("h1", Heading, "Title"), Block("p1", Paragraph, "hello 😀")])
+    == Ok([
+      Block("h1", Heading, "Title", False, 0),
+      Block("p1", Paragraph, "hello 😀", False, 0),
+    ])
+}
+
+pub fn collapsed_toggle_hides_deeper_blocks_test() {
+  let b = fn(id, kind, indent) { Block(id, kind, "", False, indent) }
+  let blocks = [
+    b("t", Toggle, 0),
+    b("c1", Paragraph, 1),
+    b("t2", Toggle, 1),
+    b("c2", Paragraph, 2),
+    b("after", Paragraph, 0),
+  ]
+  let ids = fn(collapsed) {
+    fakers_web.visible_blocks(blocks, set.from_list(collapsed))
+    |> list.map(fn(b) { b.id })
+  }
+  assert ids([]) == ["t", "c1", "t2", "c2", "after"]
+  assert ids(["t"]) == ["t", "after"]
+  assert ids(["t2"]) == ["t", "c1", "t2", "after"]
 }
 
 pub fn route_parse_test() {

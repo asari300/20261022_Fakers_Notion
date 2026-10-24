@@ -124,6 +124,8 @@ body {
   align-items: center;
   gap: 4px;
   border-radius: 4px;
+  /* 入れ子の深さ（--indent は 0, 1, 2, …） */
+  padding-left: calc(var(--indent, 0) * 24px);
 }
 .block:hover { background: var(--hover); }
 
@@ -143,7 +145,57 @@ body {
 .block-heading .block-input { font-size: 1.875rem; font-weight: 700; padding: 8px 4px; }
 .block-paragraph .block-input { font-size: 1rem; }
 
-.block-toggle,
+/* 種類ごとの見た目 */
+.block-marker, .block-check, .block-fold {
+  flex: none;
+  width: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+.block-check { height: 16px; margin: 0 4px; accent-color: var(--accent); }
+.block-fold {
+  font: inherit;
+  font-size: 0.7rem;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  height: 24px;
+  cursor: pointer;
+}
+.block-fold:hover { background: var(--hover); color: var(--fg); }
+.is-checked .block-input { color: var(--muted); text-decoration: line-through; }
+.block-quote .block-input { border-left: 3px solid var(--fg); padding-left: 12px; }
+.block-code .block-input {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  background: var(--hover);
+  border-radius: 4px;
+  padding: 8px 12px;
+  resize: none;
+  white-space: pre;
+  overflow-x: auto;
+}
+.block-rule {
+  flex: 1;
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 12px 4px;
+}
+
+.block-kind {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  height: 24px;
+  cursor: pointer;
+  opacity: 0;
+}
+.block-kind:hover, .block-kind:focus { background: var(--hover); color: var(--fg); }
+
 .block-delete {
   font: inherit;
   font-size: 0.8rem;
@@ -156,9 +208,8 @@ body {
   cursor: pointer;
   opacity: 0;
 }
-.block:hover .block-toggle,
+.block:hover .block-kind,
 .block:hover .block-delete,
-.block:focus-within .block-toggle,
+.block:focus-within .block-kind,
 .block:focus-within .block-delete { opacity: 1; }
-.block-toggle:hover { background: var(--hover); color: var(--fg); }
 .block-delete:hover { background: var(--hover); color: var(--danger); }

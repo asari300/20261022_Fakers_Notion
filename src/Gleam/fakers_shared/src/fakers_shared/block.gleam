@@ -1,5 +1,6 @@
-//// ブロック。Rust の `blocks_json` と JS の FFI が出す `[{"id","type","text"}]` と同じ形。
-//// Erlang 側では `{block, Id, heading | paragraph, Text}`。
+//// ブロック。Rust の `blocks_json` と JS の FFI が出す `[{"id","type","text","checked","indent"}]` と同じ形。
+//// Erlang 側では `{block, Id, Kind, Text, Checked, Indent}`。
+//// `checked` は ToDo のチェック、`indent` は入れ子の深さ（トグルは自分より深い後続のブロックを畳む）。
 
 import gleam/dynamic/decode
 import gleam/json
@@ -7,16 +8,40 @@ import gleam/json
 pub type BlockKind {
   Paragraph
   Heading
+  Bulleted
+  Todo
+  Code
+  Quote
+  Divider
+  Toggle
 }
 
 pub type Block {
-  Block(id: String, kind: BlockKind, text: String)
+  Block(id: String, kind: BlockKind, text: String, checked: Bool, indent: Int)
 }
+
+/// 選べる種類の一覧（表示の順）。
+pub const kinds = [
+  Paragraph,
+  Heading,
+  Bulleted,
+  Todo,
+  Code,
+  Quote,
+  Divider,
+  Toggle,
+]
 
 pub fn kind_to_string(kind: BlockKind) -> String {
   case kind {
     Paragraph -> "paragraph"
     Heading -> "heading"
+    Bulleted -> "bulleted"
+    Todo -> "todo"
+    Code -> "code"
+    Quote -> "quote"
+    Divider -> "divider"
+    Toggle -> "toggle"
   }
 }
 
@@ -24,6 +49,12 @@ pub fn kind_from_string(s: String) -> Result(BlockKind, Nil) {
   case s {
     "paragraph" -> Ok(Paragraph)
     "heading" -> Ok(Heading)
+    "bulleted" -> Ok(Bulleted)
+    "todo" -> Ok(Todo)
+    "code" -> Ok(Code)
+    "quote" -> Ok(Quote)
+    "divider" -> Ok(Divider)
+    "toggle" -> Ok(Toggle)
     _ -> Error(Nil)
   }
 }
@@ -40,7 +71,9 @@ pub fn block_decoder() -> decode.Decoder(Block) {
   use id <- decode.field("id", decode.string)
   use kind <- decode.field("type", kind_decoder())
   use text <- decode.field("text", decode.string)
-  decode.success(Block(id:, kind:, text:))
+  use checked <- decode.optional_field("checked", False, decode.bool)
+  use indent <- decode.optional_field("indent", 0, decode.int)
+  decode.success(Block(id:, kind:, text:, checked:, indent:))
 }
 
 pub fn blocks_decoder() -> decode.Decoder(List(Block)) {
@@ -57,6 +90,8 @@ pub fn block_to_json(block: Block) -> json.Json {
     #("id", json.string(block.id)),
     #("type", json.string(kind_to_string(block.kind))),
     #("text", json.string(block.text)),
+    #("checked", json.bool(block.checked)),
+    #("indent", json.int(block.indent)),
   ])
 }
 

@@ -21,7 +21,7 @@ defmodule FakersWeb.DocumentChannelTest do
 
   defp paragraph_text(state) do
     {:ok, json} = Native.blocks_json(state)
-    {:ok, [_, {:block, _, :paragraph, t}]} = :fakers_shared@block.decode_blocks(json)
+    {:ok, [_, {:block, _, :paragraph, t, _, _}]} = :fakers_shared@block.decode_blocks(json)
     t
   end
 
@@ -126,7 +126,7 @@ defmodule FakersWeb.DocumentChannelTest do
 
   defp paragraph_id(state) do
     {:ok, json} = Native.blocks_json(state)
-    {:ok, [_, {:block, id, :paragraph, _}]} = :fakers_shared@block.decode_blocks(json)
+    {:ok, [_, {:block, id, :paragraph, _, _, _}]} = :fakers_shared@block.decode_blocks(json)
     id
   end
 end

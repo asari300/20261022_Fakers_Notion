@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S008 ブロックの種類と入れ子 — Fakers Notion</title>
+<link rel="stylesheet" href="../../assets/slides.css">
+</head>
+<body data-deck="Fakers Notion S008 ブロックの種類と入れ子">
+
+<section class="slide" id="S01">
+  <span class="tag">S008 · 2026-10-24 · P2</span>
+  <h1>ブロックの種類と入れ子</h1>
+  <p class="lead">箇条書き・ToDo・コード・引用・区切り線・トグル。P2 の最後の項目</p>
+  <div class="big">入れ子は木にせず、<b>平らな配列の indent</b> で表す</div>
+</section>
+
+<section class="slide" id="S02">
+  <span class="tag">目的</span>
+  <h1>このセッションでやること</h1>
+  <ul>
+    <li>roadmap の P2「ブロックの種類の追加」を済ませる</li>
+    <li>方針は features.md のとおり: <code>type</code> を足し、<code>text</code> 以外の属性は <code>Y.Map</code> のキー</li>
+    <li>トグルの中身の持ち方だけはユーザーに聞いた → <b>インデントで持つ</b></li>
+  </ul>
+</section>
+
+<section class="slide" id="S03">
+  <span class="tag">決定と理由</span>
+  <h1>決めたこと</h1>
+  <table class="compact">
+    <tr><th>項目</th><th>決定</th><th>理由</th></tr>
+    <tr><td>入れ子</td><td><code>indent</code> と Tab / Shift+Tab。トグルは自分より深い後続を畳む</td><td>木にすると Rust・FFI・Elixir・キャレットの探索がすべて再帰になる</td></tr>
+    <tr><td>畳んだ状態</td><td>各自の画面だけ（文書に書かない）</td><td>Notion も開閉は人ごと</td></tr>
+    <tr><td>ToDo</td><td><code>Y.Map</code> の <code>checked</code></td><td>features.md の方針どおり</td></tr>
+    <tr><td>古い文書・壊れた値</td><td>無ければ false / 0。型が違えば同じく 0 に揃える</td><td>デコーダは 1 件の誤りで一覧ごと失敗する</td></tr>
+    <tr><td>コード</td><td><code>textarea</code>、Enter は改行、Ctrl+Enter で次へ</td><td>相手のキャレットは改行の数で行を決めて描く</td></tr>
+  </table>
+</section>
+
+<section class="slide" id="S04">
+  <span class="tag">図</span>
+  <h1>平らな配列で入れ子を表す</h1>
+  <svg class="fig" viewBox="0 0 800 280" role="img" aria-label="indent で入れ子を表し、トグルを畳むと深いブロックを隠す">
+    <rect class="svg-box-accent" x="40" y="20" width="300" height="44" rx="8"/>
+    <text class="svg-text-b" x="190" y="48" text-anchor="middle">▼ toggle（indent 0）</text>
+    <rect class="svg-box" x="90" y="80" width="300" height="44" rx="8"/>
+    <text class="svg-text" x="240" y="108" text-anchor="middle">paragraph（indent 1）</text>
+    <rect class="svg-box" x="140" y="140" width="300" height="44" rx="8"/>
+    <text class="svg-text" x="290" y="168" text-anchor="middle">☑ todo（indent 2）</text>
+    <rect class="svg-box" x="40" y="200" width="300" height="44" rx="8"/>
+    <text class="svg-text" x="190" y="228" text-anchor="middle">paragraph（indent 0）</text>
+    <line class="svg-line" x1="470" y1="102" x2="470" y2="162"/>
+    <text class="svg-text" x="490" y="122">畳むと隠れる</text>
+    <text class="svg-text" x="490" y="148">（トグルより深い）</text>
+    <text class="svg-text" x="490" y="228">同じ深さで止まる</text>
+  </svg>
+</section>
+
+<section class="slide" id="S05">
+  <span class="tag">再現手順</span>
+  <h1>再現と検証</h1>
+  <pre><code>mise run test:interop    # yjs の checked / indent を yrs が読む
+mise run build:web &amp;&amp; mise run test:e2e   # 9: トグル・入れ子・ToDo・畳み・コードの改行
+mise run test            # Rust / interop / Gleam / Elixir / E2E すべて通過</code></pre>
+  <div class="kpis">
+    <div class="kpi"><span class="n">8</span><span class="l">ブロックの種類</span></div>
+    <div class="kpi"><span class="n">11</span><span class="l">Gleam web tests</span></div>
+    <div class="kpi"><span class="n">21 ms</span><span class="l">tab1→tab2</span></div>
+  </div>
+</section>
+
+<section class="slide" id="S06">
+  <span class="tag">次回</span>
+  <h1>次のセッション</h1>
+  <ul>
+    <li>P2 の作業の項目は全部済んだ。次は P3（データベースとフォーミュラ）</li>
+    <li>残り: 日本語入力の変換中のリモート更新、contenteditable、番号付きリスト、並べ替え</li>
+    <li>スクリーンショットで区切り線が 2 本出る不具合を見つけた。クラス名 <code>block-&lt;種類&gt;</code> と部品のクラスがぶつからないようにする</li>
+  </ul>
+</section>
+
+<script src="../../assets/slides.js"></script>
+</body>
+</html>
