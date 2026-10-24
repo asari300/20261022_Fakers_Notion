@@ -15,7 +15,7 @@ Notion を参考に、Fakers Notion に要る機能を洗い出した。Phase �
 | ページの作成・一覧・開く | Must | P1（S002 で済） | `GET/POST /api/pages`、Lustre の一覧 |
 | 段落・見出しブロックの編集 | Must | P1（S002 で済） | `Y.Array("blocks")` の `Y.Map{id,type,text:Y.Text}`。[architecture.md](architecture.md#4-ブロックモデルと-json-の契約) |
 | Enter で新しいブロック、種別の切り替え（削除も） | Must | P1（S002 で済） | FFI の `insert_block_after` / `set_kind` |
-| リスト・ToDo・コード・引用・区切り・トグル | Must | P2 | `type` の追加。`text` 以外の属性（checked など）は `Y.Map` のキー |
+| リスト・ToDo・コード・引用・区切り・トグル | Must | P2（S008 で済） | `type` の追加。`checked` と `indent` は `Y.Map` のキー。入れ子は `indent`（Tab / Shift+Tab）、トグルは自分より深い後続のブロックを畳む。番号付きリストは未対応 |
 | キャレットを保つ編集（contenteditable） | Should | P2 | P1 は controlled input。リモート編集でキャレットが末尾に飛ぶ既知の制限 |
 | ブロックの並べ替え（ドラッグ） | Should | P2 | `Y.Array` の move。yjs の move は実験的なので、delete + insert で代用【未確認】 |
 | インライン書式（太字・リンク・コード） | Should | P2 | `Y.Text` の属性 |

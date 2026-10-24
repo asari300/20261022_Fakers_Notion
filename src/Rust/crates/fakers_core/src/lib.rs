@@ -4,7 +4,8 @@
 //! この crate の関数はすべて純関数（decode → 操作 → encode）。状態を crate の中に持たない。
 //! 理由は ADR-0003（NIF をホットスワップの対象にしない）。
 //!
-//! モデル: 根の `Y.Array("blocks")` に `Y.Map{ "id": string, "type": "paragraph" | "heading", "text": Y.Text }` を並べる。
+//! モデル: 根の `Y.Array("blocks")` に `Y.Map{ "id": string, "type": string, "text": Y.Text, "checked"?: bool, "indent"?: int }` を並べる。
+//! `type` の値は fakers_shared の `BlockKind`。`checked` と `indent` は無ければ false と 0。
 //! 文字位置は UTF-16 で数える（yjs の規則。`OffsetKind::Utf16`）。
 
 use serde_json::{Map as JsonMap, Value};
@@ -112,7 +113,7 @@ pub fn diff(state: &[u8], sv: &[u8]) -> Result<Vec<u8>, CoreError> {
     Ok(doc.transact().encode_state_as_update_v1(&sv))
 }
 
-/// ブロックの一覧を JSON（`[{"id","type","text"}]`）で。クライアントの FFI と同じ形。
+/// ブロックの一覧を JSON（`[{"id","type","text","checked","indent"}]`）で。クライアントの FFI と同じ形。
 pub fn blocks_json(state: &[u8]) -> Result<String, CoreError> {
     let doc = load(state)?;
     let blocks = doc.get_or_insert_array(ROOT);
@@ -134,6 +135,14 @@ pub fn blocks_json(state: &[u8]) -> Result<String, CoreError> {
             _ => return Err(CoreError::Shape("text が Y.Text ではない".into())),
         };
         obj.insert("text".into(), Value::String(text));
+        let checked = matches!(map.get(&txn, "checked"), Some(Out::Any(Any::Bool(true))));
+        obj.insert("checked".into(), Value::Bool(checked));
+        // 整数でないものと負の値は 0
+        let indent = match map.get(&txn, "indent") {
+            Some(Out::Any(Any::Number(n))) => n.as_i64().unwrap_or(0).max(0),
+            _ => 0,
+        };
+        obj.insert("indent".into(), Value::from(indent));
         out.push(Value::Object(obj));
     }
     Ok(Value::Array(out).to_string())

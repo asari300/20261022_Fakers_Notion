@@ -8,7 +8,7 @@ defmodule Fakers.NativeTest do
     assert is_binary(state) and byte_size(state) > 0
     assert {:ok, json} = Native.blocks_json(state)
 
-    assert {:ok, [{:block, "h1", :heading, "T"}, {:block, "p1", :paragraph, ""}]} =
+    assert {:ok, [{:block, "h1", :heading, "T", false, 0}, {:block, "p1", :paragraph, "", false, 0}]} =
              :fakers_shared@block.decode_blocks(json)
   end
 
@@ -19,7 +19,7 @@ defmodule Fakers.NativeTest do
     assert Native.blocks_json(applied) == Native.blocks_json(edited)
     assert {:ok, json} = Native.blocks_json(applied)
 
-    assert {:ok, [_, {:block, "p1", :paragraph, "こんにちは"}]} =
+    assert {:ok, [_, {:block, "p1", :paragraph, "こんにちは", false, 0}]} =
              :fakers_shared@block.decode_blocks(json)
   end
 

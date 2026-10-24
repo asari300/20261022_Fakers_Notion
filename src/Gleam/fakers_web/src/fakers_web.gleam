@@ -1,15 +1,20 @@
 //// Fakers Notion の SPA。ページ一覧とページ（ブロックの編集）の 2 画面。
 //// update は純粋に保ち、セッションの操作はすべて effect.from の中で行う。
 
-import fakers_shared/block.{type Block, Block, Heading, Paragraph}
+import fakers_shared/block.{
+  type Block, type BlockKind, Block, Bulleted, Code, Divider, Heading, Paragraph,
+  Quote, Todo, Toggle,
+}
 import fakers_shared/page.{type PageSummary}
 import fakers_web/api
 import fakers_web/route.{type Route, PageList, PageView}
 import fakers_web/session.{type Session}
 import gleam/dynamic/decode
+import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/set.{type Set}
 import gleam/string
 import lustre
 import lustre/attribute
@@ -34,6 +39,8 @@ pub type Model {
     blocks: List(Block),
     status: String,
     peers: List(Peer),
+    // 畳んだトグルの id。Notion と同じく開閉は自分の画面だけで、文書には書かない
+    collapsed: Set(String),
     draft_title: String,
     session: Option(Session),
     error: Option(String),
@@ -57,7 +64,10 @@ pub type Msg {
   PeersChanged(String)
   TextEdited(block_id: String, text: String)
   EnterPressed(block_id: String)
-  KindToggled(block_id: String, kind: block.BlockKind)
+  IndentPressed(block_id: String, delta: Int)
+  KindChanged(block_id: String, kind: String)
+  CheckToggled(block_id: String, checked: Bool)
+  CollapseToggled(block_id: String)
   BlockDeleted(block_id: String)
 }
 
@@ -70,6 +80,7 @@ fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
       blocks: [],
       status: "",
       peers: [],
+      collapsed: set.new(),
       draft_title: "",
       session: None,
       error: None,
@@ -191,20 +202,80 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
-    EnterPressed(id) -> #(
+    EnterPressed(id) ->
+      case list.find(model.blocks, fn(b) { b.id == id }) {
+        Error(Nil) -> #(model, effect.none())
+        // 空のリスト・ToDo・トグルで Enter を押したら、段落に戻して抜ける
+        Ok(Block(kind: Bulleted, text: "", ..))
+        | Ok(Block(kind: Todo, text: "", ..))
+        | Ok(Block(kind: Toggle, text: "", ..)) -> #(
+          model,
+          with_session(model, fn(s) { session.set_kind(s, id, "paragraph") }),
+        )
+        Ok(b) -> {
+          // リストと ToDo は同じ種類を続け、トグルは中身（1 段深い段落）を足して開く
+          let #(kind, indent) = case b.kind {
+            Bulleted | Todo -> #(b.kind, b.indent)
+            Toggle -> #(Paragraph, b.indent + 1)
+            _ -> #(Paragraph, b.indent)
+          }
+          #(
+            Model(..model, collapsed: set.delete(model.collapsed, id)),
+            with_session(model, fn(s) {
+              let new_id =
+                session.insert_block_after(
+                  s,
+                  id,
+                  block.kind_to_string(kind),
+                  indent,
+                )
+              session.focus_block(new_id)
+            }),
+          )
+        }
+      }
+
+    IndentPressed(id, delta) -> {
+      // 深さは 0 から「1 つ前のブロックより 1 段深い」まで
+      let #(prev, found) =
+        list.fold_until(model.blocks, #(-1, None), fn(acc, b) {
+          case b.id == id {
+            True -> list.Stop(#(acc.0, Some(b)))
+            False -> list.Continue(#(b.indent, None))
+          }
+        })
+      case found {
+        None -> #(model, effect.none())
+        Some(b) -> {
+          let indent = int.clamp(b.indent + delta, 0, prev + 1)
+          case indent == b.indent {
+            True -> #(model, effect.none())
+            False -> #(
+              model,
+              with_session(model, fn(s) { session.set_indent(s, id, indent) }),
+            )
+          }
+        }
+      }
+    }
+
+    KindChanged(id, kind) -> #(
       model,
-      with_session(model, fn(s) {
-        let new_id = session.insert_block_after(s, id, "paragraph")
-        session.focus_block(new_id)
-      }),
+      with_session(model, fn(s) { session.set_kind(s, id, kind) }),
     )
 
-    KindToggled(id, kind) -> #(
+    CheckToggled(id, checked) -> #(
       model,
-      with_session(model, fn(s) {
-        session.set_kind(s, id, block.kind_to_string(kind))
-      }),
+      with_session(model, fn(s) { session.set_checked(s, id, checked) }),
     )
+
+    CollapseToggled(id) -> {
+      let collapsed = case set.contains(model.collapsed, id) {
+        True -> set.delete(model.collapsed, id)
+        False -> set.insert(model.collapsed, id)
+      }
+      #(Model(..model, collapsed:), effect.none())
+    }
 
     BlockDeleted(id) -> #(
       model,
@@ -337,66 +408,180 @@ fn view_page(model: Model) -> Element(Msg) {
       ),
       html.span([attribute.class("status")], [html.text(model.status)]),
     ]),
-    element.fragment(list.map(model.blocks, view_block)),
+    element.fragment(
+      list.map(visible_blocks(model.blocks, model.collapsed), fn(b) {
+        view_block(b, set.contains(model.collapsed, b.id))
+      }),
+    ),
   ])
 }
 
-fn view_block(b: Block) -> Element(Msg) {
-  let #(kind_class, toggle_label, toggle_to, toggle_title) = case b.kind {
-    Heading -> #("block-heading", "¶", Paragraph, "段落にする")
-    Paragraph -> #("block-paragraph", "H", Heading, "見出しにする")
+/// 畳んだトグルの後ろにある、トグルより深いブロックを除く。
+pub fn visible_blocks(
+  blocks: List(Block),
+  collapsed: Set(String),
+) -> List(Block) {
+  let #(_, shown) =
+    list.fold(blocks, #(None, []), fn(acc, b) {
+      let #(hide_deeper_than, shown) = acc
+      case hide_deeper_than {
+        Some(depth) if b.indent > depth -> acc
+        _ -> {
+          let hide = case b.kind == Toggle && set.contains(collapsed, b.id) {
+            True -> Some(b.indent)
+            False -> None
+          }
+          #(hide, [b, ..shown])
+        }
+      }
+    })
+  list.reverse(shown)
+}
+
+fn kind_label(kind: BlockKind) -> String {
+  case kind {
+    Paragraph -> "段落"
+    Heading -> "見出し"
+    Bulleted -> "箇条書き"
+    Todo -> "ToDo"
+    Code -> "コード"
+    Quote -> "引用"
+    Divider -> "区切り線"
+    Toggle -> "トグル"
   }
-  html.div([attribute.class("block " <> kind_class)], [
-    html.input([
-      attribute.type_("text"),
-      attribute.id("block-" <> b.id),
-      attribute.class("block-input"),
-      attribute.value(b.text),
-      event.on_input(fn(text) { TextEdited(b.id, text) }),
-      on_enter(EnterPressed(b.id)),
-    ]),
-    html.button(
-      [
-        attribute.type_("button"),
-        attribute.class("block-toggle"),
-        attribute.title(toggle_title),
-        event.on_click(KindToggled(b.id, toggle_to)),
-      ],
-      [html.text(toggle_label)],
-    ),
-    html.button(
-      [
-        attribute.type_("button"),
-        attribute.class("block-delete"),
-        attribute.title("ブロックを消す"),
-        event.on_click(BlockDeleted(b.id)),
-      ],
-      [html.text("×")],
-    ),
-  ])
 }
 
-/// keydown の Enter だけを拾う。日本語入力の変換確定の Enter（isComposing）と
+fn view_block(b: Block, collapsed: Bool) -> Element(Msg) {
+  let kind = block.kind_to_string(b.kind)
+  let text_attrs = [
+    attribute.id("block-" <> b.id),
+    attribute.class("block-input"),
+    attribute.value(b.text),
+    event.on_input(fn(text) { TextEdited(b.id, text) }),
+    on_block_key(b),
+  ]
+  let marker = case b.kind {
+    Bulleted -> html.span([attribute.class("block-marker")], [html.text("•")])
+    Todo ->
+      html.input([
+        attribute.type_("checkbox"),
+        attribute.class("block-check"),
+        attribute.checked(b.checked),
+        attribute.aria_label("完了"),
+        event.on_check(fn(checked) { CheckToggled(b.id, checked) }),
+      ])
+    Toggle ->
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.class("block-fold"),
+          attribute.aria_expanded(!collapsed),
+          attribute.aria_label("中身を開閉する"),
+          event.on_click(CollapseToggled(b.id)),
+        ],
+        [
+          html.text(case collapsed {
+            True -> "▶"
+            False -> "▼"
+          }),
+        ],
+      )
+    _ -> element.none()
+  }
+  let body = case b.kind {
+    Divider -> html.hr([attribute.class("block-rule")])
+    // コードは複数行。Enter は改行で、Ctrl+Enter で次のブロックへ
+    Code ->
+      html.textarea(
+        [
+          attribute.attribute("wrap", "off"),
+          attribute.attribute("spellcheck", "false"),
+          attribute.rows(list.length(string.split(b.text, "\n"))),
+          ..text_attrs
+        ],
+        b.text,
+      )
+    _ -> html.input([attribute.type_("text"), ..text_attrs])
+  }
+  html.div(
+    [
+      attribute.class("block block-" <> kind),
+      attribute.classes([#("is-checked", b.kind == Todo && b.checked)]),
+      attribute.style("--indent", int.to_string(b.indent)),
+    ],
+    [
+      marker,
+      body,
+      html.select(
+        [
+          attribute.class("block-kind"),
+          attribute.aria_label("ブロックの種類"),
+          event.on_change(fn(k) { KindChanged(b.id, k) }),
+        ],
+        list.map(block.kinds, fn(k) {
+          html.option(
+            [
+              attribute.value(block.kind_to_string(k)),
+              attribute.selected(k == b.kind),
+            ],
+            kind_label(k),
+          )
+        }),
+      ),
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.class("block-delete"),
+          attribute.title("ブロックを消す"),
+          event.on_click(BlockDeleted(b.id)),
+        ],
+        [html.text("×")],
+      ),
+    ],
+  )
+}
+
+/// ブロックの入力欄の keydown。Enter（コードでは Ctrl / Cmd + Enter）で次のブロック、
+/// Tab / Shift+Tab で深さを変える。日本語入力の変換中（isComposing）と
 /// ほかのキーは無視する（デコードを失敗させるとメッセージは出ない）。
-fn on_enter(msg: Msg) -> attribute.Attribute(Msg) {
+fn on_block_key(b: Block) -> attribute.Attribute(Msg) {
   event.advanced("keydown", {
     use key <- decode.field("key", decode.string)
     use composing <- decode.optional_field("isComposing", False, decode.bool)
-    case key, composing {
+    use shift <- decode.optional_field("shiftKey", False, decode.bool)
+    use ctrl <- decode.optional_field("ctrlKey", False, decode.bool)
+    use meta <- decode.optional_field("metaKey", False, decode.bool)
+    let msg = case key, composing {
+      _, True -> Error(Nil)
       "Enter", False ->
+        case b.kind != Code || ctrl || meta {
+          True -> Ok(EnterPressed(b.id))
+          False -> Error(Nil)
+        }
+      "Tab", False ->
+        Ok(
+          IndentPressed(b.id, case shift {
+            True -> -1
+            False -> 1
+          }),
+        )
+      _, _ -> Error(Nil)
+    }
+    case msg {
+      Ok(msg) ->
         decode.success(event.handler(
           dispatch: msg,
           prevent_default: True,
           stop_propagation: False,
         ))
-      _, _ ->
+      Error(Nil) ->
         decode.failure(
           event.handler(
-            dispatch: msg,
+            dispatch: BlockDeleted(""),
             prevent_default: False,
             stop_propagation: False,
           ),
-          "Enter",
+          "key",
         )
     }
   })

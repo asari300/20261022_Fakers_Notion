@@ -110,7 +110,8 @@ defmodule Fakers.Documents.DocumentServer do
   defp title_set(state) do
     with {:ok, json} <- Native.blocks_json(state),
          {:ok, blocks} <- :fakers_shared@block.decode_blocks(json),
-         {:block, _, :heading, text} <- Enum.find(blocks, &match?({:block, _, :heading, _}, &1)) do
+         {:block, _, :heading, text, _, _} <-
+           Enum.find(blocks, &match?({:block, _, :heading, _, _, _}, &1)) do
       [title: text]
     else
       _ -> []

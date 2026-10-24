@@ -20,7 +20,7 @@ defmodule Fakers.DocumentsTest do
     assert id == doc.id
     assert {:ok, json} = Native.blocks_json(doc.state)
 
-    assert {:ok, [{:block, _, :heading, "テスト"}, {:block, _, :paragraph, ""}]} =
+    assert {:ok, [{:block, _, :heading, "テスト", false, 0}, {:block, _, :paragraph, "", false, 0}]} =
              :fakers_shared@block.decode_blocks(json)
 
     assert Documents.get_page(doc.id).id == doc.id
@@ -84,14 +84,14 @@ defmodule Fakers.DocumentsTest do
   defp block_id(state, index) do
     {:ok, json} = Native.blocks_json(state)
     {:ok, blocks} = :fakers_shared@block.decode_blocks(json)
-    {:block, id, _, _} = Enum.at(blocks, index)
+    {:block, id, _, _, _, _} = Enum.at(blocks, index)
     id
   end
 
   defp text(state, index) do
     {:ok, json} = Native.blocks_json(state)
     {:ok, blocks} = :fakers_shared@block.decode_blocks(json)
-    {:block, _, _, t} = Enum.at(blocks, index)
+    {:block, _, _, t, _, _} = Enum.at(blocks, index)
     t
   end
 end

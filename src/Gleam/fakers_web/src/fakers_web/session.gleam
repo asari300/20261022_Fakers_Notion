@@ -21,17 +21,26 @@ pub fn open(
 @external(javascript, "./session.ffi.mjs", "set_text")
 pub fn set_text(session: Session, block_id: String, new_text: String) -> Nil
 
-/// `block_id` の直後に空のブロックを足し、新しい id を返す。
+/// `block_id` の直後に深さ `indent` の空のブロックを足し、新しい id を返す。
 @external(javascript, "./session.ffi.mjs", "insert_block_after")
 pub fn insert_block_after(
   session: Session,
   block_id: String,
   kind: String,
+  indent: Int,
 ) -> String
 
-/// ブロックの種類（"paragraph" | "heading"）を変える。
+/// ブロックの種類（`block.kind_to_string` の値）を変える。
 @external(javascript, "./session.ffi.mjs", "set_kind")
 pub fn set_kind(session: Session, block_id: String, kind: String) -> Nil
+
+/// ToDo のチェックを付け外す。
+@external(javascript, "./session.ffi.mjs", "set_checked")
+pub fn set_checked(session: Session, block_id: String, checked: Bool) -> Nil
+
+/// 入れ子の深さを変える。
+@external(javascript, "./session.ffi.mjs", "set_indent")
+pub fn set_indent(session: Session, block_id: String, indent: Int) -> Nil
 
 /// ブロックを消す。最後の 1 つは消さない。
 @external(javascript, "./session.ffi.mjs", "delete_block")

@@ -17,7 +17,13 @@ const cargo = (example, args, input) =>
 const fromHex = (s) => Uint8Array.from(s.trim().match(/../g).map((h) => parseInt(h, 16)));
 const toHex = (u8) => Array.from(u8, (b) => b.toString(16).padStart(2, "0")).join("");
 const snapshot = (doc) =>
-  doc.getArray("blocks").toArray().map((m) => ({ id: m.get("id"), type: m.get("type"), text: m.get("text").toString() }));
+  doc.getArray("blocks").toArray().map((m) => ({
+    id: m.get("id"),
+    type: m.get("type"),
+    text: m.get("text").toString(),
+    checked: m.get("checked") ?? false,
+    indent: m.get("indent") ?? 0,
+  }));
 
 // 1. yrs → yjs
 const stateHex = cargo("dump_page", ["Interop"]);
@@ -25,8 +31,8 @@ const doc = new Y.Doc();
 Y.applyUpdate(doc, fromHex(stateHex));
 const blocks = snapshot(doc);
 assert.deepEqual(blocks, [
-  { id: "h1", type: "heading", text: "Interop" },
-  { id: "p1", type: "paragraph", text: "" },
+  { id: "h1", type: "heading", text: "Interop", checked: false, indent: 0 },
+  { id: "p1", type: "paragraph", text: "", checked: false, indent: 0 },
 ]);
 
 // 2. yjs → yrs（絵文字で UTF-16 の位置も確かめる）
@@ -34,10 +40,16 @@ const svBefore = Y.encodeStateVector(doc);
 const para = doc.getArray("blocks").get(1).get("text");
 para.insert(0, "hello 😀");
 para.insert(8, "!"); // 😀 は UTF-16 で 2 単位なので "hello 😀" は 8
+// ToDo のチェックと入れ子の深さ（Y.Map のキー。yjs の整数が yrs で読めるか）
+doc.getArray("blocks").get(1).set("type", "todo");
+doc.getArray("blocks").get(1).set("checked", true);
+doc.getArray("blocks").get(1).set("indent", 2);
 const update = Y.encodeStateAsUpdate(doc, svBefore);
 const json = cargo("apply_hex", [], `${stateHex.trim()}\n${toHex(update)}\n`);
 const parsed = JSON.parse(json);
 assert.equal(parsed[1].text, "hello 😀!");
+assert.equal(parsed[1].checked, true);
+assert.equal(parsed[1].indent, 2);
 assert.deepEqual(parsed, snapshot(doc));
 
 // 3. yjs の全状態をそのまま yrs に渡しても同じ
