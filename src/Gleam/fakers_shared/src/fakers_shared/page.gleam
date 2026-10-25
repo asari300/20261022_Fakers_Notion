@@ -21,10 +21,15 @@ pub fn decode_page(input: String) -> Result(PageSummary, json.DecodeError) {
   json.parse(input, page_decoder())
 }
 
-pub fn decode_pages(input: String) -> Result(List(PageSummary), json.DecodeError) {
+pub fn decode_pages(
+  input: String,
+) -> Result(List(PageSummary), json.DecodeError) {
   json.parse(input, pages_decoder())
 }
 
 pub fn page_to_json(page: PageSummary) -> json.Json {
-  json.object([#("id", json.string(page.id)), #("title", json.string(page.title))])
+  json.object([
+    #("id", json.string(page.id)),
+    #("title", json.string(page.title)),
+  ])
 }

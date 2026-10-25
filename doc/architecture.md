@@ -67,6 +67,7 @@ doc/  log/                      文書と記録
   - `type` は `paragraph` `heading` `bulleted` `todo` `code` `quote` `divider` `toggle` のどれか。
   - `checked` は ToDo のチェック、`indent` は入れ子の深さ（0 から）。どちらも無ければ false と 0（S007 までの文書はキーを持たない）。
   - 入れ子は木にせず、平らな配列の `indent` で表す。トグルを畳むと、すぐ後ろにある自分より深いブロックを隠す。畳んだ状態は各自の画面だけに持ち、文書には書かない（Notion と同じ）。
+  - `type: "database"`（S011、[ADR-0008](adr/0008-database-in-page-doc.md)）は `text` が表の題名で、さらに `columns: Y.Array<Y.Map{id, name, type}>` と `rows: Y.Array<Y.Map{id, <列の id>: 値}>` を持つ。列の `type` は `text` / `number` / `checkbox`。値は列の型と合うときだけ読む。Rust の `blocks_json` は表を出さず、クライアントの FFI がブロックの JSON に `"table": {"columns": [...], "rows": [{"id", "cells": {...}}]}` を足す（`fakers_shared/database` の `decode_tables` が読む）。
 - 位置は **UTF-16** で数える（yjs の規則）。yrs 側は `Options { offset_kind: OffsetKind::Utf16 }` で `Doc` を作る。
 - JSON の形は Rust の `blocks_json` と JS の FFI の両方が同じものを出す（キーの順は問わない。Rust は `id, text, type` の辞書順で出す）:
 
@@ -77,7 +78,7 @@ doc/  log/                      文書と記録
 - Gleam の型（`fakers_shared/src/fakers_shared/block.gleam`）:
 
   ```gleam
-  pub type BlockKind { Paragraph Heading Bulleted Todo Code Quote Divider Toggle }
+  pub type BlockKind { Paragraph Heading Bulleted Todo Code Quote Divider Toggle Database }
   pub type Block { Block(id: String, kind: BlockKind, text: String, checked: Bool, indent: Int) }
   pub fn decode_blocks(json: String) -> Result(List(Block), json.DecodeError)
   pub fn block_to_json(Block) -> json.Json
@@ -131,8 +132,8 @@ impl Formula { pub fn ty(&self) -> Type; pub fn eval(&self, row: &HashMap<String
 
 ## 9. クライアント（Lustre の SPA）の構成
 
-- `src/fakers_web.gleam`: `Model(route, pages, blocks, status, draft_title, session, error)`。`update` は純粋で、セッションの操作はすべて `effect.from` の中で行う。
-- `src/fakers_web/session.gleam` + `session.ffi.mjs`: `open(doc_id, on_blocks, on_status)`、`set_text`、`insert_block_after`、`set_kind`、`delete_block`、`close`、`focus_block`、純粋な `diff_text`。Session が `Y.Doc`・`Socket`・`Channel` を所有し、Gleam にはブロックの JSON と状態の文字列（`connecting` / `joined` / `error: …` / `closed`）だけを渡す。
+- `src/fakers_web.gleam`: `Model(route, pages, blocks, tables, number_draft, status, peers, collapsed, draft_title, session, error)`。`update` は純粋で、セッションの操作はすべて `effect.from` の中で行う。`tables` はデータベースのブロックの id → 列と行、`number_draft` は数値のセルに打っている途中の文字列（Lustre は入力のたびに入力欄の値を描画の値へ戻すため、"1." のような途中の形を Model に持つ）。
+- `src/fakers_web/session.gleam` + `session.ffi.mjs`: `open(doc_id, on_blocks, on_status, on_peers)`、`set_text`、`insert_block_after`、`set_kind`、`set_checked`、`set_indent`、`delete_block`、データベースの `add_column` / `set_column` / `delete_column` / `add_row` / `delete_row` / `set_cell`、`close`、`focus_block`、純粋な `diff_text`。Session が `Y.Doc`・`Socket`・`Channel` を所有し、Gleam にはブロックの JSON と状態の文字列（`connecting` / `joined` / `error: …` / `closed`）だけを渡す。
 - `src/fakers_web/route.gleam` + `route.ffi.mjs`: `#/` と `#/p/<id>` のハッシュのルーティング。
 - `src/fakers_web/api.gleam`: rsvp で `/api/pages` を読む・作る。
 - ビルド: `gleam build --target javascript` → `esbuild entry.mjs --bundle` → `priv/static/assets/app.js`（507.6 KB、dev）。`app.css` も同じ場所にコピーする。
