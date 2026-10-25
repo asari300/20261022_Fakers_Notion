@@ -181,8 +181,9 @@ function paintCursors(session) {
     const sl = Math.max(Math.min(pa.x, ph.x), r.left);
     const sr = Math.min(Math.max(pa.x, ph.x), r.right);
     if (a !== h && pa.y === ph.y && sl < sr) box("remote-sel", sl, ph.y, sr - sl, ph.h);
-    // 入力欄の外へスクロールしたキャレットは描かない
-    if (ph.x < r.left || ph.x > r.right || ph.y < r.top || ph.y + ph.h > r.bottom + 1) continue;
+    // 横にスクロールして入力欄の外に出たキャレットは描かない。縦は見ない: textarea は行数ぶんの
+    // rows を持ち縦にスクロールしないが、その rows は Lustre がこの後で増やすので、今の高さと比べると新しい行を捨ててしまう
+    if (ph.x < r.left || ph.x > r.right) continue;
     const caret = box("remote-caret", ph.x, ph.y, 2, ph.h);
     caret.dataset.peer = p.name;
     caret.dataset.index = String(h);

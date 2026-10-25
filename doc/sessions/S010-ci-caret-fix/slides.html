@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S010 コードブロックのキャレットが CI で消える — Fakers Notion</title>
+<link rel="stylesheet" href="../../assets/slides.css">
+</head>
+<body data-deck="Fakers Notion S010 CI の E2E を直す">
+
+<section class="slide" id="S01">
+  <span class="tag">S010 · 2026-10-25 · P2 の手直し</span>
+  <h1>コードブロックのキャレットが CI で消える</h1>
+  <p class="lead">S009 の push で CI の E2E（S008 の場面 9）が落ちた</p>
+  <div class="big">新しい行のキャレットを「入力欄の外」と判定していた</div>
+</section>
+
+<section class="slide" id="S02">
+  <span class="tag">目的</span>
+  <h1>このセッションでやること</h1>
+  <ul>
+    <li>run 40160672881 の test ジョブ: <code>.remote-caret</code> が見つからない（2 回とも同じ行）</li>
+    <li>ローカルと S008 の CI では通っていた。描画の順番で結果が変わる</li>
+    <li>直して、同じ手順でもう一度 push する</li>
+  </ul>
+</section>
+
+<section class="slide" id="S03">
+  <span class="tag">決定と理由</span>
+  <h1>原因と直し方</h1>
+  <table class="compact">
+    <tr><th>項目</th><th>内容</th></tr>
+    <tr><td>原因</td><td>キャレットの描画は文書の更新の直後（Lustre より先）に走る。textarea の <code>rows</code> はまだ 1 行で、2 行目のキャレットは下にはみ出すとして捨てていた</td></tr>
+    <tr><td>直し方</td><td>縦の範囲の検査を消した（横だけ見る）</td></tr>
+    <tr><td>理由</td><td>textarea は行数ぶんの rows を持ち、折り返さないので縦にスクロールしない。<code>input</code> は 1 行なので縦の検査は元々効かない</td></tr>
+  </table>
+</section>
+
+<section class="slide" id="S04">
+  <span class="tag">図</span>
+  <h1>描く順番</h1>
+  <svg class="fig" viewBox="0 0 800 220" role="img" aria-label="文書の更新、キャレットの描画、Lustre の再描画の順に走る">
+    <rect class="svg-box" x="20" y="60" width="200" height="60" rx="8"/>
+    <text class="svg-text-b" x="120" y="96" text-anchor="middle">"child\ny" が届く</text>
+    <rect class="svg-box-accent" x="300" y="60" width="200" height="60" rx="8"/>
+    <text class="svg-text-b" x="400" y="96" text-anchor="middle">キャレットを描く</text>
+    <rect class="svg-box" x="580" y="60" width="200" height="60" rx="8"/>
+    <text class="svg-text-b" x="680" y="96" text-anchor="middle">rows を 2 にする</text>
+    <line class="svg-line" x1="220" y1="90" x2="300" y2="90"/>
+    <line class="svg-line" x1="500" y1="90" x2="580" y2="90"/>
+    <text class="svg-text" x="400" y="160" text-anchor="middle">この時点の枠は 1 行 → 旧: 2 行目を捨てる</text>
+  </svg>
+</section>
+
+<section class="slide" id="S05">
+  <span class="tag">再現手順</span>
+  <h1>再現と検証</h1>
+  <pre><code>mise run build:web &amp;&amp; mise run test:e2e
+mise run test
+gh run watch &lt;run-id&gt; --exit-status</code></pre>
+  <div class="kpis">
+    <div class="kpi"><span class="n">2/2</span><span class="l">旧コードの CI の失敗</span></div>
+    <div class="kpi"><span class="n">1</span><span class="l">変えた条件</span></div>
+  </div>
+</section>
+
+<section class="slide" id="S06">
+  <span class="tag">次回</span>
+  <h1>次のセッション</h1>
+  <ul>
+    <li>P3 の 2 回目: データベースのデータモデルとテーブルのビュー</li>
+    <li>キャレットの描画が Lustre の再描画より先に走る構造は残っている（文書を測る・縦を見ないで避けている）</li>
+  </ul>
+</section>
+
+<script src="../../assets/slides.js"></script>
+</body>
+</html>
