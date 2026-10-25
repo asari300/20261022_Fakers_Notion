@@ -96,6 +96,10 @@ pub fn diff(state: &[u8], sv: &[u8]) -> Result<Vec<u8>, CoreError>;
 pub fn blocks_json(state: &[u8]) -> Result<String, CoreError>;
 pub fn edit_text(state: &[u8], block_id: &str, utf16_index: u32, insert: &str)
     -> Result<(Vec<u8>, Vec<u8>), CoreError>;                                    // (new_state, update) テストとシード用
+
+// fakers_core::formula（S009、ADR-0007）。NIF にはまだ出していない
+pub fn compile(src: &str, schema: &HashMap<String, Type>) -> Result<Formula, FormulaError>;
+impl Formula { pub fn ty(&self) -> Type; pub fn eval(&self, row: &HashMap<String, Value>) -> Result<Value, FormulaError>; }
 ```
 
 - `fakers_nif` は 1 対 1 で包む。戻り値は `Result<T, String>`（`{:ok, t} | {:error, msg}`）。
