@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S011 データベースとテーブルのビュー — Fakers Notion</title>
+<link rel="stylesheet" href="../../assets/slides.css">
+</head>
+<body data-deck="Fakers Notion S011 データベースとテーブルのビュー">
+
+<section class="slide" id="S01">
+  <span class="tag">S011 · 2026-10-25 · P3</span>
+  <h1>データベースとテーブルのビュー</h1>
+  <p class="lead">列（テキスト・数値・チェック）と行とセルが 2 タブで同期する</p>
+  <div class="big">データベースは<b>ページの中のブロック</b>。同期と保存は今の仕組みのまま</div>
+</section>
+
+<section class="slide" id="S02">
+  <span class="tag">目的</span>
+  <h1>このセッションでやること</h1>
+  <ul>
+    <li>P3 の 2 回目。features.md の方針「ビューはページの中のブロック、データは <code>Y.Map</code> の行」を形にする</li>
+    <li>テーブルのビューで、列の追加・名前・型・削除、行の追加・削除、セルの編集</li>
+    <li>ボード・リスト・フィルタ・フォーミュラの列は次から</li>
+  </ul>
+</section>
+
+<section class="slide" id="S03">
+  <span class="tag">決定と理由</span>
+  <h1>決めたこと（ADR-0008）</h1>
+  <table class="compact">
+    <tr><th>項目</th><th>決定</th><th>理由</th></tr>
+    <tr><td>置き場所</td><td><code>type: "database"</code> のブロック</td><td>同期・保存・Presence がそのまま使える</td></tr>
+    <tr><td>列と行</td><td>ブロックの <code>columns</code> と <code>rows</code>（Y.Array の Y.Map）</td><td>列や行を足す・消すが同時でも収束する</td></tr>
+    <tr><td>セル</td><td>文字列・数値・真偽値をそのまま。後勝ち</td><td>小さく始める。同じセルの同時入力は片方が消える（shortcut）</td></tr>
+    <tr><td>型を変えたとき</td><td>値は消さず、合わない値は空として表示</td><td>型を戻せば戻る。壊れた値で表全体が読めなくならない</td></tr>
+    <tr><td>サーバ</td><td>表を読まない</td><td>Rust と Elixir は種類と題名だけ。表はクライアントの FFI が読む</td></tr>
+  </table>
+</section>
+
+<section class="slide" id="S04">
+  <span class="tag">図</span>
+  <h1>ブロックの中の表</h1>
+  <svg class="fig" viewBox="0 0 800 260" role="img" aria-label="blocks 配列の中の database ブロックが columns と rows を持つ">
+    <rect class="svg-box" x="20" y="20" width="220" height="44" rx="8"/>
+    <text class="svg-text" x="130" y="48" text-anchor="middle">heading「蔵書」</text>
+    <rect class="svg-box-accent" x="20" y="80" width="220" height="44" rx="8"/>
+    <text class="svg-text-b" x="130" y="108" text-anchor="middle">database「本棚」</text>
+    <rect class="svg-box" x="20" y="140" width="220" height="44" rx="8"/>
+    <text class="svg-text" x="130" y="168" text-anchor="middle">paragraph</text>
+    <rect class="svg-box" x="320" y="40" width="440" height="60" rx="8"/>
+    <text class="svg-text" x="540" y="66" text-anchor="middle">columns: {id, name: "価格", type: "number"}</text>
+    <text class="svg-text" x="540" y="88" text-anchor="middle">… 列ごとに 1 つの Y.Map</text>
+    <rect class="svg-box" x="320" y="130" width="440" height="60" rx="8"/>
+    <text class="svg-text" x="540" y="156" text-anchor="middle">rows: {id, &lt;列の id&gt;: 1.5, …}</text>
+    <text class="svg-text" x="540" y="178" text-anchor="middle">… 行ごとに 1 つの Y.Map</text>
+    <line class="svg-line" x1="240" y1="102" x2="320" y2="70"/>
+    <line class="svg-line" x1="240" y1="102" x2="320" y2="160"/>
+    <text class="svg-text" x="130" y="230" text-anchor="middle">Y.Array("blocks")</text>
+  </svg>
+</section>
+
+<section class="slide" id="S05">
+  <span class="tag">再現手順</span>
+  <h1>再現と検証</h1>
+  <pre><code>mise run test:shared     # 表の JSON を両ターゲットで読む
+mise run test:interop    # yjs の表のブロックを yrs が読む
+mise run build:web &amp;&amp; mise run test:e2e   # 10: 列・行・セルの同期</code></pre>
+  <div class="kpis">
+    <div class="kpi"><span class="n">3</span><span class="l">列の型</span></div>
+    <div class="kpi"><span class="n">13</span><span class="l">Gleam web tests</span></div>
+    <div class="kpi"><span class="n">10</span><span class="l">E2E の場面</span></div>
+  </div>
+</section>
+
+<section class="slide" id="S06">
+  <span class="tag">次回</span>
+  <h1>次のセッション</h1>
+  <ul>
+    <li>フィルタとソート、ボードとリストのビュー</li>
+    <li>フォーミュラの列: Rust の評価器をどこで呼ぶか（NIF でサーバか、WASM でクライアントか）</li>
+    <li>日付と選択の列の型</li>
+  </ul>
+</section>
+
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

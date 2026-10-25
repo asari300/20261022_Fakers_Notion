@@ -2,14 +2,20 @@
 //// update は純粋に保ち、セッションの操作はすべて effect.from の中で行う。
 
 import fakers_shared/block.{
-  type Block, type BlockKind, Block, Bulleted, Code, Divider, Heading, Paragraph,
-  Quote, Todo, Toggle,
+  type Block, type BlockKind, Block, Bulleted, Code, Database, Divider, Heading,
+  Paragraph, Quote, Todo, Toggle,
+}
+import fakers_shared/database.{
+  type Cell, type Column, type PropType, type Table, CheckboxCell, CheckboxProp,
+  EmptyCell, NumberCell, NumberProp, TextCell, TextProp,
 }
 import fakers_shared/page.{type PageSummary}
 import fakers_web/api
 import fakers_web/route.{type Route, PageList, PageView}
 import fakers_web/session.{type Session}
+import gleam/dict.{type Dict}
 import gleam/dynamic/decode
+import gleam/float
 import gleam/int
 import gleam/json
 import gleam/list
@@ -37,6 +43,11 @@ pub type Model {
     route: Route,
     pages: List(PageSummary),
     blocks: List(Block),
+    // データベースのブロックの id → 列と行
+    tables: Dict(String, Table),
+    // 数値のセルに打っている途中の文字列（"行 id/列 id", 文字列）。Lustre は入力のたびに入力欄の値を
+    // 描画の値へ戻すので、"1." のような数として読めない途中の形はここに持たないと消える
+    number_draft: Option(#(String, String)),
     status: String,
     peers: List(Peer),
     // 畳んだトグルの id。Notion と同じく開閉は自分の画面だけで、文書には書かない
@@ -69,6 +80,15 @@ pub type Msg {
   CheckToggled(block_id: String, checked: Bool)
   CollapseToggled(block_id: String)
   BlockDeleted(block_id: String)
+  ColumnAdded(block_id: String)
+  ColumnRenamed(block_id: String, column_id: String, name: String)
+  ColumnTypeChanged(block_id: String, column_id: String, prop: String)
+  ColumnDeleted(block_id: String, column_id: String)
+  RowAdded(block_id: String)
+  RowDeleted(block_id: String, row_id: String)
+  CellEdited(block_id: String, row_id: String, column_id: String, cell: Cell)
+  NumberTyped(block_id: String, row_id: String, column_id: String, raw: String)
+  NumberBlurred
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
@@ -78,6 +98,8 @@ fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
       route: current,
       pages: [],
       blocks: [],
+      tables: dict.new(),
+      number_draft: None,
       status: "",
       peers: [],
       collapsed: set.new(),
@@ -108,6 +130,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             ..model,
             route: next,
             blocks: [],
+            tables: dict.new(),
             status: "",
             peers: [],
             session: None,
@@ -165,12 +188,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }
 
     BlocksChanged(json) ->
-      case block.decode_blocks(json) {
-        Ok(blocks) -> #(Model(..model, blocks:), effect.none())
-        Error(_) -> #(
-          Model(..model, error: Some("ブロックを読めませんでした")),
+      case block.decode_blocks(json), database.decode_tables(json) {
+        Ok(blocks), Ok(tables) -> #(
+          Model(..model, blocks:, tables:),
           effect.none(),
         )
+        _, _ -> #(Model(..model, error: Some("ブロックを読めませんでした")), effect.none())
       }
 
     StatusChanged(status) -> #(Model(..model, status:), effect.none())
@@ -281,6 +304,64 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       model,
       with_session(model, fn(s) { session.delete_block(s, id) }),
     )
+
+    ColumnAdded(id) -> {
+      let n = case dict.get(model.tables, id) {
+        Ok(t) -> list.length(t.columns) + 1
+        Error(Nil) -> 1
+      }
+      #(
+        model,
+        with_session(model, fn(s) {
+          let _ =
+            session.add_column(s, id, "プロパティ " <> int.to_string(n), "text")
+          Nil
+        }),
+      )
+    }
+    ColumnRenamed(id, col, name) -> #(
+      model,
+      with_session(model, fn(s) { session.set_column(s, id, col, "name", name) }),
+    )
+    ColumnTypeChanged(id, col, prop) -> #(
+      model,
+      with_session(model, fn(s) { session.set_column(s, id, col, "type", prop) }),
+    )
+    ColumnDeleted(id, col) -> #(
+      model,
+      with_session(model, fn(s) { session.delete_column(s, id, col) }),
+    )
+    RowAdded(id) -> #(
+      model,
+      with_session(model, fn(s) {
+        let _ = session.add_row(s, id)
+        Nil
+      }),
+    )
+    RowDeleted(id, row) -> #(
+      model,
+      with_session(model, fn(s) { session.delete_row(s, id, row) }),
+    )
+    CellEdited(id, row, col, cell) -> #(
+      model,
+      with_session(model, fn(s) {
+        session.set_cell(
+          s,
+          id,
+          row,
+          col,
+          json.to_string(database.cell_to_json(cell)),
+        )
+      }),
+    )
+    NumberTyped(id, row, col, raw) -> {
+      let model = Model(..model, number_draft: Some(#(row <> "/" <> col, raw)))
+      case parse_number(raw) {
+        Ok(cell) -> update(model, CellEdited(id, row, col, cell))
+        Error(Nil) -> #(model, effect.none())
+      }
+    }
+    NumberBlurred -> #(Model(..model, number_draft: None), effect.none())
   }
 }
 
@@ -410,7 +491,12 @@ fn view_page(model: Model) -> Element(Msg) {
     ]),
     element.fragment(
       list.map(visible_blocks(model.blocks, model.collapsed), fn(b) {
-        view_block(b, set.contains(model.collapsed, b.id))
+        view_block(
+          b,
+          set.contains(model.collapsed, b.id),
+          dict.get(model.tables, b.id),
+          model.number_draft,
+        )
       }),
     ),
   ])
@@ -448,10 +534,16 @@ fn kind_label(kind: BlockKind) -> String {
     Quote -> "引用"
     Divider -> "区切り線"
     Toggle -> "トグル"
+    Database -> "データベース"
   }
 }
 
-fn view_block(b: Block, collapsed: Bool) -> Element(Msg) {
+fn view_block(
+  b: Block,
+  collapsed: Bool,
+  table: Result(Table, Nil),
+  number_draft: Option(#(String, String)),
+) -> Element(Msg) {
   let kind = block.kind_to_string(b.kind)
   let text_attrs = [
     attribute.id("block-" <> b.id),
@@ -501,6 +593,18 @@ fn view_block(b: Block, collapsed: Bool) -> Element(Msg) {
         ],
         b.text,
       )
+    Database ->
+      html.div([attribute.class("db")], [
+        html.input([
+          attribute.type_("text"),
+          attribute.placeholder("無題のデータベース"),
+          ..text_attrs
+        ]),
+        case table {
+          Ok(t) -> view_table(b.id, t, number_draft)
+          Error(Nil) -> element.none()
+        },
+      ])
     _ -> html.input([attribute.type_("text"), ..text_attrs])
   }
   html.div(
@@ -539,6 +643,182 @@ fn view_block(b: Block, collapsed: Bool) -> Element(Msg) {
       ),
     ],
   )
+}
+
+fn prop_label(prop: PropType) -> String {
+  case prop {
+    TextProp -> "テキスト"
+    NumberProp -> "数値"
+    CheckboxProp -> "チェック"
+  }
+}
+
+/// データベースのテーブルのビュー。列の名前と型は見出しで、セルは型ごとの入力欄で直接編集する。
+fn view_table(
+  id: String,
+  t: Table,
+  number_draft: Option(#(String, String)),
+) -> Element(Msg) {
+  let header =
+    list.map(t.columns, fn(c) {
+      html.th([attribute.class("db-col")], [
+        html.input([
+          attribute.type_("text"),
+          attribute.class("db-col-name"),
+          attribute.value(c.name),
+          attribute.aria_label("列の名前"),
+          event.on_input(fn(name) { ColumnRenamed(id, c.id, name) }),
+        ]),
+        html.select(
+          [
+            attribute.class("db-col-type"),
+            attribute.aria_label(c.name <> " の型"),
+            event.on_change(fn(p) { ColumnTypeChanged(id, c.id, p) }),
+          ],
+          list.map(database.prop_types, fn(p) {
+            html.option(
+              [
+                attribute.value(database.prop_to_string(p)),
+                attribute.selected(p == c.prop),
+              ],
+              prop_label(p),
+            )
+          }),
+        ),
+        html.button(
+          [
+            attribute.type_("button"),
+            attribute.class("db-col-delete"),
+            attribute.title("列を消す"),
+            event.on_click(ColumnDeleted(id, c.id)),
+          ],
+          [html.text("×")],
+        ),
+      ])
+    })
+  let add_col =
+    html.th([], [
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.class("db-add-col"),
+          attribute.title("列を足す"),
+          event.on_click(ColumnAdded(id)),
+        ],
+        [html.text("＋")],
+      ),
+    ])
+  let rows =
+    list.map(t.rows, fn(r) {
+      html.tr([attribute.class("db-row")], [
+        element.fragment(
+          list.map(t.columns, fn(c) {
+            html.td([], [
+              view_cell(id, r.id, c, database.cell(r, c), number_draft),
+            ])
+          }),
+        ),
+        html.td([], [
+          html.button(
+            [
+              attribute.type_("button"),
+              attribute.class("db-row-delete"),
+              attribute.title("行を消す"),
+              event.on_click(RowDeleted(id, r.id)),
+            ],
+            [html.text("×")],
+          ),
+        ]),
+      ])
+    })
+  html.div([attribute.class("db-scroll")], [
+    html.table([attribute.class("db-table")], [
+      html.thead([], [html.tr([], list.append(header, [add_col]))]),
+      html.tbody([], rows),
+    ]),
+    html.button(
+      [
+        attribute.type_("button"),
+        attribute.class("db-add-row"),
+        event.on_click(RowAdded(id)),
+      ],
+      [html.text("＋ 行を足す")],
+    ),
+  ])
+}
+
+fn view_cell(
+  id: String,
+  row: String,
+  c: Column,
+  cell: Cell,
+  number_draft: Option(#(String, String)),
+) -> Element(Msg) {
+  let label = attribute.aria_label(c.name)
+  let edited = fn(cell) { CellEdited(id, row, c.id, cell) }
+  case c.prop {
+    CheckboxProp ->
+      html.input([
+        attribute.type_("checkbox"),
+        attribute.class("db-cell db-check"),
+        attribute.checked(cell == CheckboxCell(True)),
+        label,
+        event.on_check(fn(b) { edited(CheckboxCell(b)) }),
+      ])
+    NumberProp ->
+      html.input([
+        attribute.type_("text"),
+        attribute.attribute("inputmode", "decimal"),
+        attribute.class("db-cell db-number"),
+        attribute.value(case number_draft, cell {
+          Some(#(key, raw)), _ if key == row <> "/" <> c.id -> raw
+          _, NumberCell(x) -> number_to_string(x)
+          _, _ -> ""
+        }),
+        label,
+        // 数として読めない途中の入力（"1." や "-"）は書かずに下書きとして持つ
+        event.on_input(fn(raw) { NumberTyped(id, row, c.id, raw) }),
+        event.on_blur(NumberBlurred),
+      ])
+    TextProp ->
+      html.input([
+        attribute.type_("text"),
+        attribute.class("db-cell db-text"),
+        attribute.value(case cell {
+          TextCell(s) -> s
+          _ -> ""
+        }),
+        label,
+        event.on_input(fn(s) {
+          edited(case s {
+            "" -> EmptyCell
+            s -> TextCell(s)
+          })
+        }),
+      ])
+  }
+}
+
+/// 数値のセルの入力。空ならセルを消す。
+pub fn parse_number(s: String) -> Result(Cell, Nil) {
+  case string.trim(s) {
+    "" -> Ok(EmptyCell)
+    t ->
+      case int.parse(t), float.parse(t) {
+        Ok(n), _ -> Ok(NumberCell(int.to_float(n)))
+        _, Ok(x) -> Ok(NumberCell(x))
+        _, _ -> Error(Nil)
+      }
+  }
+}
+
+/// 整数なら小数点を付けない（120.0 → "120"）。
+pub fn number_to_string(x: Float) -> String {
+  let n = float.truncate(x)
+  case int.to_float(n) == x {
+    True -> int.to_string(n)
+    False -> float.to_string(x)
+  }
 }
 
 /// ブロックの入力欄の keydown。Enter（コードでは Ctrl / Cmd + Enter）で次のブロック、

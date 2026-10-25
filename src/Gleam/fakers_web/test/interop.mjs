@@ -52,6 +52,26 @@ assert.equal(parsed[1].checked, true);
 assert.equal(parsed[1].indent, 2);
 assert.deepEqual(parsed, snapshot(doc));
 
+// データベースのブロック（列と行は入れ子の Y.Array / Y.Map）。yrs の blocks_json は種類と題名だけを読む
+doc.transact(() => {
+  const db = new Y.Map();
+  db.set("id", "d1");
+  db.set("type", "database");
+  db.set("text", new Y.Text("本棚"));
+  const col = new Y.Map();
+  col.set("id", "c1");
+  col.set("name", "価格");
+  col.set("type", "number");
+  const row = new Y.Map();
+  row.set("id", "r1");
+  row.set("c1", 1.5);
+  db.set("columns", Y.Array.from([col]));
+  db.set("rows", Y.Array.from([row]));
+  doc.getArray("blocks").push([db]);
+});
+const dbJson = JSON.parse(cargo("apply_hex", [], `\n${toHex(Y.encodeStateAsUpdate(doc))}\n`));
+assert.deepEqual(dbJson[2], { id: "d1", type: "database", text: "本棚", checked: false, indent: 0 });
+
 // 3. yjs の全状態をそのまま yrs に渡しても同じ
 const full = cargo("apply_hex", [], `\n${toHex(Y.encodeStateAsUpdate(doc))}\n`);
 assert.deepEqual(JSON.parse(full), snapshot(doc));

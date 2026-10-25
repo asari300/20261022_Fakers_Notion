@@ -1,6 +1,7 @@
 //// ブロック。Rust の `blocks_json` と JS の FFI が出す `[{"id","type","text","checked","indent"}]` と同じ形。
 //// Erlang 側では `{block, Id, Kind, Text, Checked, Indent}`。
 //// `checked` は ToDo のチェック、`indent` は入れ子の深さ（トグルは自分より深い後続のブロックを畳む）。
+//// データベース（`Database`）の `text` は表の題名。列と行は `fakers_shared/database` が別に読む。
 
 import gleam/dynamic/decode
 import gleam/json
@@ -14,6 +15,7 @@ pub type BlockKind {
   Quote
   Divider
   Toggle
+  Database
 }
 
 pub type Block {
@@ -30,6 +32,7 @@ pub const kinds = [
   Quote,
   Divider,
   Toggle,
+  Database,
 ]
 
 pub fn kind_to_string(kind: BlockKind) -> String {
@@ -42,6 +45,7 @@ pub fn kind_to_string(kind: BlockKind) -> String {
     Quote -> "quote"
     Divider -> "divider"
     Toggle -> "toggle"
+    Database -> "database"
   }
 }
 
@@ -55,6 +59,7 @@ pub fn kind_from_string(s: String) -> Result(BlockKind, Nil) {
     "quote" -> Ok(Quote)
     "divider" -> Ok(Divider)
     "toggle" -> Ok(Toggle)
+    "database" -> Ok(Database)
     _ -> Error(Nil)
   }
 }

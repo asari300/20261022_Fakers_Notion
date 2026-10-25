@@ -42,6 +42,50 @@ pub fn set_checked(session: Session, block_id: String, checked: Bool) -> Nil
 @external(javascript, "./session.ffi.mjs", "set_indent")
 pub fn set_indent(session: Session, block_id: String, indent: Int) -> Nil
 
+/// データベースに列を足し、新しい列の id を返す。`prop` は `database.prop_to_string` の値。
+@external(javascript, "./session.ffi.mjs", "add_column")
+pub fn add_column(
+  session: Session,
+  block_id: String,
+  name: String,
+  prop: String,
+) -> String
+
+/// 列の名前（`key` = "name"）か型（`key` = "type"）を変える。
+@external(javascript, "./session.ffi.mjs", "set_column")
+pub fn set_column(
+  session: Session,
+  block_id: String,
+  column_id: String,
+  key: String,
+  value: String,
+) -> Nil
+
+/// 列を消し、各行のその列の値も消す。
+@external(javascript, "./session.ffi.mjs", "delete_column")
+pub fn delete_column(
+  session: Session,
+  block_id: String,
+  column_id: String,
+) -> Nil
+
+/// 末尾に空の行を足し、その id を返す。
+@external(javascript, "./session.ffi.mjs", "add_row")
+pub fn add_row(session: Session, block_id: String) -> String
+
+@external(javascript, "./session.ffi.mjs", "delete_row")
+pub fn delete_row(session: Session, block_id: String, row_id: String) -> Nil
+
+/// セルに値（`database.cell_to_json` の JSON 文字列）を書く。null ならセルを消す。
+@external(javascript, "./session.ffi.mjs", "set_cell")
+pub fn set_cell(
+  session: Session,
+  block_id: String,
+  row_id: String,
+  column_id: String,
+  value_json: String,
+) -> Nil
+
 /// ブロックを消す。最後の 1 つは消さない。
 @external(javascript, "./session.ffi.mjs", "delete_block")
 pub fn delete_block(session: Session, block_id: String) -> Nil

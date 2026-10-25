@@ -247,11 +247,42 @@ def main() -> int:
             expect(remote).to_have_attribute("data-index", "7", timeout=5_000)
             box, cbox = inputs1.nth(4).bounding_box(), remote.bounding_box()
             assert cbox["y"] - box["y"] > cbox["height"], (box, cbox)
+
+            # 10. データベース（テーブルのビュー）: 列と行とセルが相手に届き、列の型ごとに読める
+            t1.locator(".block-kind").nth(5).select_option("database")
+            expect(t2.locator(".db-table")).to_have_count(1, timeout=5_000)
+            expect(t2.locator(".db-col-name")).to_have_value("名前")
+            t1.locator(".db-add-col").click()
+            expect(t1.locator(".db-col-name")).to_have_count(2, timeout=5_000)
+            t1.locator(".db-col-name").nth(1).fill("価格")
+            t1.locator(".db-col-type").nth(1).select_option("number")
+            t1.locator(".db-add-row").click()
+            expect(t1.locator(".db-row")).to_have_count(1, timeout=5_000)
+            t1.locator(".db-text").first.fill("りんご")
+            t1.locator(".db-number").first.press_sequentially("1.")  # 途中の形は書かない
+            t1.locator(".db-number").first.press_sequentially("5")
+            expect(t2.locator(".db-text").first).to_have_value("りんご", timeout=5_000)
+            expect(t2.locator(".db-number").first).to_have_value("1.5", timeout=5_000)
+            expect(t2.locator(".db-col-name").nth(1)).to_have_value("価格")
+            expect(t2.locator(".db-col-type").nth(1)).to_have_value("number")
+            # タブ 2 でチェックの列を足して付けると、タブ 1 に届く
+            t2.locator(".db-add-col").click()
+            expect(t2.locator(".db-col-type")).to_have_count(3, timeout=5_000)
+            t2.locator(".db-col-type").nth(2).select_option("checkbox")
+            t2.locator(".db-check").first.check()
+            expect(t1.locator(".db-check").first).to_be_checked(timeout=5_000)
+            # 列の型を数値からテキストに変えると、古い数値は空として読む（消えはしない）
+            t1.locator(".db-col-type").nth(1).select_option("text")
+            expect(t2.locator(".db-text").nth(1)).to_have_value("", timeout=5_000)
+            t1.locator(".db-col-type").nth(1).select_option("number")
+            expect(t2.locator(".db-number").first).to_have_value("1.5", timeout=5_000)
+            t2.locator(".db-row-delete").first.click()
+            expect(t1.locator(".db-row")).to_have_count(0, timeout=5_000)
             browser.close()
         print(
             f"OK e2e: {url} / tab1→tab2 {latency_ms:.0f} ms / キャレット保持 / Presence とリモートのキャレット / title 同期 / "
             f"再起動後も残った / 切断中の編集が再接続後 {reconnect_ms:.0f} ms で届いた / "
-            f"トグル・入れ子・ToDo・コードの改行"
+            f"トグル・入れ子・ToDo・コードの改行 / データベースの列・行・セル"
         )
         return 0
     finally:

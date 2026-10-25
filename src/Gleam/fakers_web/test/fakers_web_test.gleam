@@ -1,4 +1,5 @@
 import fakers_shared/block.{Block, Heading, Paragraph, Toggle}
+import fakers_shared/database.{EmptyCell, NumberCell}
 import fakers_web
 import fakers_web/route
 import fakers_web/session
@@ -89,4 +90,20 @@ pub fn route_parse_test() {
   assert route.parse("#/p/abc-123") == route.PageView("abc-123")
   assert route.parse("#/p/") == route.PageList
   assert route.to_hash(route.PageView("x")) == "#/p/x"
+}
+
+pub fn parse_number_test() {
+  assert fakers_web.parse_number("120") == Ok(NumberCell(120.0))
+  assert fakers_web.parse_number(" -0.5 ") == Ok(NumberCell(-0.5))
+  assert fakers_web.parse_number("") == Ok(EmptyCell)
+  // 打っている途中の形は書かない
+  assert fakers_web.parse_number("1.") == Error(Nil)
+  assert fakers_web.parse_number("-") == Error(Nil)
+  assert fakers_web.parse_number("abc") == Error(Nil)
+}
+
+pub fn number_to_string_test() {
+  assert fakers_web.number_to_string(120.0) == "120"
+  assert fakers_web.number_to_string(0.5) == "0.5"
+  assert fakers_web.number_to_string(-3.0) == "-3"
 }

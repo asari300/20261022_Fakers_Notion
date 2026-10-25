@@ -1,5 +1,10 @@
-import fakers_shared/block.{Block, Heading, Paragraph, Todo}
+import fakers_shared/block.{Block, Database, Heading, Paragraph, Todo}
+import fakers_shared/database.{
+  CheckboxCell, CheckboxProp, Column, EmptyCell, NumberCell, NumberProp, Table,
+  TextCell, TextProp,
+}
 import fakers_shared/page.{PageSummary}
+import gleam/dict
 import gleam/json
 import gleam/list
 import gleeunit
@@ -72,4 +77,37 @@ pub fn page_round_trip_test() {
     "[{\"id\":\"1\",\"title\":\"A\"},{\"id\":\"2\",\"title\":\"B\"}]",
   )
   |> should.equal(Ok([PageSummary("1", "A"), PageSummary("2", "B")]))
+}
+
+/// FFI の snapshot がデータベースのブロックに足す `table`。
+const table_fixture =
+  "[{\"id\":\"p\",\"type\":\"paragraph\",\"text\":\"\"},{\"id\":\"d\",\"type\":\"database\",\"text\":\"本\",\"table\":{\"columns\":[{\"id\":\"c1\",\"name\":\"名前\",\"type\":\"text\"},{\"id\":\"c2\",\"name\":\"価格\",\"type\":\"number\"},{\"id\":\"c3\",\"name\":\"済み\",\"type\":\"checkbox\"},{\"id\":\"c4\",\"name\":\"謎\",\"type\":\"formula?\"}],\"rows\":[{\"id\":\"r1\",\"cells\":{\"c1\":\"りんご\",\"c2\":120,\"c3\":true,\"c4\":[1]}},{\"id\":\"r2\",\"cells\":{\"c1\":3.5,\"c2\":0.5}},{\"id\":\"r3\"}]}}]"
+
+pub fn decode_tables_test() {
+  let assert Ok(tables) = database.decode_tables(table_fixture)
+  dict.keys(tables) |> should.equal(["d"])
+  let assert Ok(Table(columns: [name, price, done, odd], rows: [r1, r2, r3])) =
+    dict.get(tables, "d")
+  name |> should.equal(Column("c1", "名前", TextProp))
+  price.prop |> should.equal(NumberProp)
+  done.prop |> should.equal(CheckboxProp)
+  // 知らない列の型はテキストとして読む
+  odd.prop |> should.equal(TextProp)
+  database.cell(r1, name) |> should.equal(TextCell("りんご"))
+  database.cell(r1, price) |> should.equal(NumberCell(120.0))
+  database.cell(r1, done) |> should.equal(CheckboxCell(True))
+  // 配列のような知らない値と、列の型と合わない値は空
+  database.cell(r1, odd) |> should.equal(EmptyCell)
+  database.cell(r2, name) |> should.equal(EmptyCell)
+  database.cell(r2, price) |> should.equal(NumberCell(0.5))
+  database.cell(r3, done) |> should.equal(EmptyCell)
+  // ブロックの一覧としても読める
+  let assert Ok([_, b]) = block.decode_blocks(table_fixture)
+  b.kind |> should.equal(Database)
+}
+
+pub fn prop_strings_test() {
+  list.each(database.prop_types, fn(p) {
+    database.prop_from_string(database.prop_to_string(p)) |> should.equal(Ok(p))
+  })
 }

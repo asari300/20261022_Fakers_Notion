@@ -46,8 +46,38 @@ function snapshot(doc) {
       // 他人が壊れた値を書いても一覧ごと読めなくならないよう、ここで形を揃える
       checked: m.get("checked") === true,
       indent: Number.isSafeInteger(m.get("indent")) ? Math.max(0, m.get("indent")) : 0,
+      table: m.get("type") === "database" ? tableJson(m) : undefined,
     })),
   );
+}
+
+// データベースのブロックの列と行（fakers_shared/database の形）。行の Y.Map は "id" と列の id → 値
+const isCellValue = (v) =>
+  typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v));
+const hasId = (m) => m instanceof Y.Map && typeof m.get("id") === "string";
+function tableJson(m) {
+  const cols = m.get("columns");
+  const rows = m.get("rows");
+  if (!(cols instanceof Y.Array) || !(rows instanceof Y.Array)) return undefined;
+  return {
+    columns: cols.toArray().filter(hasId).map((c) => ({
+      id: c.get("id"),
+      name: String(c.get("name") ?? ""),
+      type: String(c.get("type") ?? "text"),
+    })),
+    rows: rows.toArray().filter(hasId).map((r) => ({
+      id: r.get("id"),
+      cells: Object.fromEntries([...r.entries()].filter(([k, v]) => k !== "id" && isCellValue(v))),
+    })),
+  };
+}
+
+function newColumn(name, type) {
+  const c = new Y.Map();
+  c.set("id", crypto.randomUUID());
+  c.set("name", name);
+  c.set("type", type);
+  return c;
 }
 
 function findIndex(blocks, blockId) {
@@ -343,7 +373,81 @@ export function insert_block_after(session, blockId, kind, indent) {
 
 export function set_kind(session, blockId, kind) {
   const block = findBlock(session, blockId);
-  if (block && block.get("type") !== kind) block.set("type", kind);
+  if (!block || block.get("type") === kind) return undefined;
+  session.doc.transact(() => {
+    block.set("type", kind);
+    // データベースにしたら列 1 つ・行 0 の表を作る。種類を戻しても表は消さない（もう一度選べば戻る）
+    if (kind === "database" && !(block.get("columns") instanceof Y.Array)) {
+      const cols = new Y.Array();
+      cols.push([newColumn("名前", "text")]);
+      block.set("columns", cols);
+      block.set("rows", new Y.Array());
+    }
+  });
+  return undefined;
+}
+
+// データベースの列と行。表が無いブロックや、見つからない id には何もしない
+function tableOf(session, blockId) {
+  const block = findBlock(session, blockId);
+  const cols = block?.get("columns");
+  const rows = block?.get("rows");
+  return cols instanceof Y.Array && rows instanceof Y.Array ? { cols, rows } : null;
+}
+
+export function add_column(session, blockId, name, type) {
+  const t = tableOf(session, blockId);
+  if (!t) return "";
+  const c = newColumn(name, type);
+  t.cols.push([c]);
+  return c.get("id");
+}
+
+// key は "name" か "type"
+export function set_column(session, blockId, colId, key, value) {
+  const t = tableOf(session, blockId);
+  const i = t ? findIndex(t.cols, colId) : -1;
+  if (i >= 0) t.cols.get(i).set(key, value);
+  return undefined;
+}
+
+export function delete_column(session, blockId, colId) {
+  const t = tableOf(session, blockId);
+  const i = t ? findIndex(t.cols, colId) : -1;
+  if (i < 0) return undefined;
+  session.doc.transact(() => {
+    t.cols.delete(i, 1);
+    for (const r of t.rows.toArray()) if (r instanceof Y.Map) r.delete(colId);
+  });
+  return undefined;
+}
+
+export function add_row(session, blockId) {
+  const t = tableOf(session, blockId);
+  if (!t) return "";
+  const r = new Y.Map();
+  r.set("id", crypto.randomUUID());
+  t.rows.push([r]);
+  return r.get("id");
+}
+
+export function delete_row(session, blockId, rowId) {
+  const t = tableOf(session, blockId);
+  const i = t ? findIndex(t.rows, rowId) : -1;
+  if (i >= 0) t.rows.delete(i, 1);
+  return undefined;
+}
+
+// value は JSON の文字列。null ならセルを消す。
+// shortcut: セルは文字列ごと後勝ち（Y.Text にしない）。同じセルを 2 人が同時に打つと片方が消える。困ったら Y.Text にする
+export function set_cell(session, blockId, rowId, colId, valueJson) {
+  const t = tableOf(session, blockId);
+  const i = t ? findIndex(t.rows, rowId) : -1;
+  if (i < 0) return undefined;
+  const v = JSON.parse(valueJson);
+  const row = t.rows.get(i);
+  if (v === null) row.delete(colId);
+  else if (isCellValue(v) && row.get(colId) !== v) row.set(colId, v);
   return undefined;
 }
 
