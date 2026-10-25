@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S009 フォーミュラ言語 — Fakers Notion</title>
+<link rel="stylesheet" href="../../assets/slides.css">
+</head>
+<body data-deck="Fakers Notion S009 フォーミュラ言語">
+
+<section class="slide" id="S01">
+  <span class="tag">S009 · 2026-10-25 · P3</span>
+  <h1>フォーミュラ言語</h1>
+  <p class="lead">字句解析・構文解析・型検査・評価を Rust の純関数で</p>
+  <div class="big"><code>prop("価格") * prop("数量") &gt; 300 ? "高い" : "安い"</code></div>
+</section>
+
+<section class="slide" id="S02">
+  <span class="tag">目的</span>
+  <h1>このセッションでやること</h1>
+  <ul>
+    <li>P3 の完了条件「フォーミュラの例題集が Rust のテストで通る」を満たす</li>
+    <li>データベースのデータモデルに依らずに作れるので、P3 の最初に置いた</li>
+    <li>NIF と UI への組み込みは、行とプロパティの持ち方を決めるときに回す</li>
+  </ul>
+</section>
+
+<section class="slide" id="S03">
+  <span class="tag">決定と理由</span>
+  <h1>決めたこと（ADR-0007）</h1>
+  <table class="compact">
+    <tr><th>項目</th><th>決定</th><th>理由</th></tr>
+    <tr><td>置き場所</td><td><code>fakers_core::formula</code></td><td>依存が増えない。純関数で NIF と WASM の両方に載る</td></tr>
+    <tr><td>API</td><td><code>compile(src, schema)</code> → <code>eval(row)</code></td><td>型検査は列ごとに 1 回、行ごとは評価だけ</td></tr>
+    <tr><td>型</td><td>数値・テキスト・真偽値。暗黙の変換なし</td><td><code>1 + "a"</code> を型エラーにして早く気づかせる</td></tr>
+    <tr><td>空の値</td><td>行に無いプロパティは 0・空文字・false</td><td>新しい行はほとんどの値を持たない</td></tr>
+    <tr><td>深さ</td><td>入れ子は 100 まで</td><td>再帰で NIF のスタック（40 kword）があふれると VM ごと落ちる</td></tr>
+  </table>
+</section>
+
+<section class="slide" id="S04">
+  <span class="tag">図</span>
+  <h1>4 段の流れ</h1>
+  <svg class="fig" viewBox="0 0 800 220" role="img" aria-label="字句解析、構文解析、型検査までを compile で、評価を eval で行う">
+    <rect class="svg-box" x="20" y="40" width="160" height="60" rx="8"/>
+    <text class="svg-text-b" x="100" y="76" text-anchor="middle">字句解析</text>
+    <rect class="svg-box" x="220" y="40" width="160" height="60" rx="8"/>
+    <text class="svg-text-b" x="300" y="76" text-anchor="middle">構文解析</text>
+    <rect class="svg-box" x="420" y="40" width="160" height="60" rx="8"/>
+    <text class="svg-text-b" x="500" y="76" text-anchor="middle">型検査</text>
+    <rect class="svg-box-accent" x="620" y="40" width="160" height="60" rx="8"/>
+    <text class="svg-text-b" x="700" y="76" text-anchor="middle">評価</text>
+    <line class="svg-line" x1="180" y1="70" x2="220" y2="70"/>
+    <line class="svg-line" x1="380" y1="70" x2="420" y2="70"/>
+    <line class="svg-line" x1="580" y1="70" x2="620" y2="70"/>
+    <text class="svg-text" x="300" y="150" text-anchor="middle">compile(src, schema) ― 列ごとに 1 回</text>
+    <text class="svg-text" x="700" y="150" text-anchor="middle">eval(row) ― 行ごと</text>
+    <text class="svg-text" x="400" y="195" text-anchor="middle">エラーは位置（先頭からの文字数）と日本語の文言</text>
+  </svg>
+</section>
+
+<section class="slide" id="S05">
+  <span class="tag">再現手順</span>
+  <h1>再現と検証</h1>
+  <pre><code>cd src/Rust
+cargo test -p fakers_core --test formula   # 例題集
+mise run test                              # 全部</code></pre>
+  <div class="kpis">
+    <div class="kpi"><span class="n">42</span><span class="l">例題</span></div>
+    <div class="kpi"><span class="n">22</span><span class="l">構文・型のエラー</span></div>
+    <div class="kpi"><span class="n">4</span><span class="l">実行時エラー</span></div>
+  </div>
+</section>
+
+<section class="slide" id="S06">
+  <span class="tag">次回</span>
+  <h1>次のセッション</h1>
+  <ul>
+    <li>データベースのデータモデル: 行とプロパティを Y.Doc にどう置くか</li>
+    <li>テーブルのビューと、フォーミュラ列を NIF で計算する経路</li>
+    <li>日付の型・メソッド記法・リレーションは、そのときに広げる</li>
+  </ul>
+</section>
+
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

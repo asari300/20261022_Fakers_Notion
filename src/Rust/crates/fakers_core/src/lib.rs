@@ -8,6 +8,8 @@
 //! `type` の値は fakers_shared の `BlockKind`。`checked` と `indent` は無ければ false と 0。
 //! 文字位置は UTF-16 で数える（yjs の規則。`OffsetKind::Utf16`）。
 
+pub mod formula;
+
 use serde_json::{Map as JsonMap, Value};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
